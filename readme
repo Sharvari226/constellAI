@@ -1,0 +1,114 @@
+# ConstellAI
+
+**Physics-Informed Autonomous Orbital Intelligence for Space Traffic Management**
+
+Temporal Graph Neural Networks + Multi-Agent Reinforcement Learning for constellation-scale conjunction forecasting and collision-avoidance coordination.
+
+Target venues: AIAA SciTech · IEEE Aerospace Conference · NeurIPS/ICLR workshops
+Timeline: 8–10 months · Team: 4 developers + 1 industry mentor
+
+---
+
+## What this is
+
+ConstellAI models Earth's orbital environment as a dynamic graph, forecasts conjunctions (close-approach events) multiple days ahead, and coordinates constellation-wide avoidance maneuvers under fuel constraints — using public TLE data, orbital mechanics, temporal graph learning, and multi-agent RL.
+
+This is not a dashboard with a model bolted on. Every module has an explicit physics or learning-theoretic justification, documented in `docs/adr/`.
+
+## Architecture
+
+| Module | Responsibility | Owner(s) |
+|---|---|---|
+| `orbital_mechanics/` (M1) | TLE ingestion, SGP4 propagation, frame transforms, perturbation models, conjunction geometry | Dev A + Dev B |
+| `graph/` (M2) | Dynamic graph construction from propagated states, temporal windowing, feature engineering | Dev C |
+| `models/tgnn/` (M3) | Temporal GNN — conjunction probability / time-to-closest-approach forecasting | Dev C |
+| `models/marl/` (M4) | Multi-agent RL — coordinated avoidance maneuver policies | Dev D |
+| `simulation/` (M5) | Independent ground-truth simulator, scenario generation, evaluation metrics | Dev A + Dev B |
+| infra (M6) | Experiment tracking, CI/CD, benchmarking, reproducibility tooling | Dev D |
+
+Interface contracts between modules (units, coordinate frames, tensor shapes) are frozen in `docs/adr/` before implementation begins — do not change an interface without an ADR update and integration-lead sign-off.
+
+---
+
+## Getting Started — Step by Step
+
+### Step 0 — Environment & Repo Setup
+- [ ] Clone repo, create the folder skeleton (see `docs/adr/0001-repo-structure.md`)
+- [ ] Set up Python environment (pin version; use `poetry` or `pip-tools`, not loose `requirements.txt`)
+- [ ] Install pre-commit hooks (`black`, `ruff`, `mypy`)
+- [ ] Configure GitHub Actions: lint + type-check + unit test on every PR
+- [ ] Set up experiment tracking (MLflow or W&B) — every future run must log config + commit hash + seed
+- [ ] Each dev confirms a reproducible environment (document exact steps in `docs/setup.md`)
+
+### Step 1 — Literature Review & Problem Formalization
+- [ ] Survey existing conjunction-assessment methods (covariance-based, TLE-only approaches) — identify what public-TLE-only work already exists and its limitations
+- [ ] Survey temporal/dynamic GNN literature for trajectory or interaction forecasting
+- [ ] Survey MARL for coordination under physical/fuel constraints (MAPPO, QMIX, MADDPG, COMA) and any prior space-domain applications
+- [ ] Write up: problem definition, gap analysis, and explicit statement of what ConstellAI contributes beyond existing work
+- [ ] Mentor review of lit review before any modeling begins
+
+### Step 2 — Orbital Mechanics Core (M1) + Ground-Truth Simulator (M5)
+- [ ] Implement TLE parsing and SGP4 propagation
+- [ ] Validate propagator against Vallado's published test vectors — **hard gate, do not proceed until this passes**
+- [ ] Cross-validate against an independent library (Skyfield or poliastro) on the same inputs
+- [ ] Implement coordinate/frame transforms (ECI, ECEF, RTN)
+- [ ] Implement J2, atmospheric drag, and solar radiation pressure perturbation models
+- [ ] Implement conjunction geometry (time of closest approach, miss distance) and basic error propagation
+- [ ] Build independent scenario generator in `simulation/` (must not share code paths with the model pipeline — it's the referee, not a participant)
+- [ ] Write physics validation test suite (`tests/physics_validation/`) — conservation checks, known-vector checks
+
+### Step 3 — Non-ML Baseline
+- [ ] Implement a simple miss-distance/TCA-threshold conjunction flagging baseline
+- [ ] Run baseline end-to-end on real TLE data
+- [ ] Record baseline metrics before any ML training starts — you need this number to know if the ML is actually helping
+
+### Step 4 — Graph Construction (M2) + TGNN Prototype (M3)
+- [ ] Define graph schema: node features, edge criteria (proximity/relative-motion threshold), temporal windowing scheme
+- [ ] Implement graph construction pipeline from M1 outputs
+- [ ] Build first TGNN prototype — target: overfit on a toy subset as a sanity check before scaling up
+- [ ] Write ADR justifying TGNN architecture choice vs. alternatives (e.g., non-temporal GNN, spatio-temporal RNN)
+- [ ] Train on real data, compare against Step 3 baseline with reported confidence intervals
+
+### Step 5 — MARL Environment (M4)
+- [ ] Define MDP/POMDP formulation: state, action, reward, observation model
+- [ ] Build RL environment on top of M1/M5 (not M3 yet — validate control logic against ground truth first)
+- [ ] Train single-agent baseline policy on toy 2–3 satellite scenario
+- [ ] Write ADR justifying algorithm choice (start with MAPPO or QMIX — document why)
+- [ ] Scale to multi-agent training; compare against independent single-agent baselines on fuel-use and avoidance-success metrics
+
+### Step 6 — Integration (M3 → M4)
+- [ ] Feed TGNN conjunction forecasts into MARL state/reward per the frozen interface contract
+- [ ] Run full pipeline end-to-end on a multi-day scenario with no manual intervention
+- [ ] Red-team session: team formally critiques the integrated system as conference reviewers would
+
+### Step 7 — Scalability & Sensitivity Analysis
+- [ ] Measure performance degradation as satellite count increases
+- [ ] Identify the point where centralized MARL breaks down; validate a decomposition strategy (hierarchical/neighborhood-based control) — required for the "thousands of satellites" claim to be honest
+- [ ] Ablation studies: temporal component, physics constraints, reward terms
+- [ ] Sensitivity analysis on key hyperparameters and physical assumptions
+
+### Step 8 — Paper & Capstone Prep
+- [ ] Draft methods, results, figures, tables
+- [ ] Internal mentor red-team review of the full draft
+- [ ] Finalize reproducibility: every reported number traceable to a config + commit hash
+- [ ] Prepare capstone demonstration
+
+---
+
+## Contributing (internal)
+
+- Branch naming: `feature/<module>-<short-desc>`
+- PRs target `develop`, never `main`
+- PRs introducing a new model, physics assumption, or reward formulation: tag `needs-science-review`
+- Tag `main` at each monthly milestone (`v0.1-m1-baseline`, etc.) — these become the paper's reproducibility pointers
+- No hyperparameters hardcoded in code — all experiment configs live in `experiments/configs/`
+
+## Documentation
+
+- `docs/adr/` — Architecture Decision Records for every major design choice
+- `docs/research_log/` — weekly lab notebook
+- `docs/setup.md` — environment reproduction steps
+
+## License
+
+TBD.
