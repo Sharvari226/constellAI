@@ -1,86 +1,625 @@
 # ConstellAI
+### Physics-Informed Autonomous Orbital Intelligence for Satellite Constellation Coordination
 
-Physics-informed autonomous orbital intelligence for space traffic management — Temporal Graph Neural Networks + Multi-Agent Reinforcement Learning for constellation-scale conjunction forecasting and collision-avoidance coordination.
+> **Project handbook** — this document is the single source of truth for anyone joining, reviewing, or evaluating this project: teammates, the industry mentor, faculty advisors, or external reviewers. Read this before touching any code.
 
-Target venues: AIAA SciTech, IEEE Aerospace Conference, NeurIPS/ICLR workshops
-Timeline: 8–10 months · Team: 4 developers + 1 industry mentor
+**Status:** Pre-implementation / architecture phase
+**Team:** 4 final-year B.Tech students (CS – AI & Data Science) + 1 Industry Mentor
+**Duration:** 8–10 months
+**Target venues:** AIAA SciTech, IEEE Aerospace Conference, ICRA, NeurIPS/ICLR workshops
 
-## Overview
+> **Note on assumptions.** Several implementation details (exact library versions, cloud provider, CI runner, dataset mirror) are not yet fixed by the team. Wherever this document makes a concrete choice that hasn't been formally agreed on, it is marked **[ASSUMPTION]** so it can be revisited rather than treated as settled fact.
 
-ConstellAI models Earth's orbital environment as a dynamic graph, forecasts conjunctions multiple days ahead, and coordinates constellation-wide avoidance maneuvers under fuel constraints — using public TLE data, orbital mechanics, temporal graph learning, and multi-agent RL.
+---
 
-Every module carries an explicit physics or learning-theoretic justification, recorded in `docs/adr/`.
+## Table of Contents
 
-## Architecture
+1. [Project Overview](#1-project-overview)
+2. [Project Goals](#2-project-goals)
+3. [System Overview](#3-system-overview)
+4. [Repository Structure](#4-repository-structure)
+5. [Technology Stack](#5-technology-stack)
+6. [Development Roadmap](#6-development-roadmap)
+7. [Detailed Implementation Guide](#7-detailed-implementation-guide)
+8. [Team Responsibilities](#8-team-responsibilities)
+9. [Git Workflow](#9-git-workflow)
+10. [Development Standards](#10-development-standards)
+11. [Installation Guide](#11-installation-guide)
+12. [Dataset Guide](#12-dataset-guide)
+13. [Model Training Pipeline](#13-model-training-pipeline)
+14. [Testing Strategy](#14-testing-strategy)
+15. [Experiment Tracking](#15-experiment-tracking)
+16. [Documentation Strategy](#16-documentation-strategy)
+17. [Weekly Development Plan](#17-weekly-development-plan)
+18. [Monthly Deliverables](#18-monthly-deliverables)
+19. [Future Scope](#19-future-scope)
+20. [References](#20-references)
+21. [Contributor Guide](#21-contributor-guide)
+22. [Troubleshooting](#22-troubleshooting)
+23. [FAQ](#23-faq)
+24. [Appendix](#24-appendix)
+25. [Closing Recommendations](#25-closing-recommendations-from-the-mentor-role)
 
-| Module | Path | Responsibility | Owner(s) |
+---
+
+## 1. Project Overview
+
+### 1.1 Vision
+
+A world in which every satellite operator — from a national space agency to a two-person cubesat startup — can query a shared, continuously-updated picture of collision risk in Earth orbit, and receive coordinated, fuel-efficient avoidance recommendations, rather than each operator solving collision avoidance in isolation.
+
+### 1.2 Mission
+
+Build a research prototype, **ConstellAI**, that models the orbital environment as an evolving graph, uses a Temporal Graph Neural Network (TGNN) to forecast conjunctions (close approaches) several days ahead, and uses Multi-Agent Reinforcement Learning (MARL) to coordinate avoidance maneuvers across a constellation, subject to physical constraints (fuel budget, mission objectives, maneuver feasibility).
+
+### 1.3 Problem Statement
+
+Low Earth Orbit (LEO) is increasingly congested. Conjunction assessment today is largely:
+
+- **Pairwise and reactive** — most operational systems (e.g., the U.S. Space Surveillance Network pipeline, ESA's Space Debris Office tools) screen object pairs against a catalog and flag close approaches individually, rather than reasoning about the constellation as a coupled system.
+- **Single-timestep** — risk is usually assessed at a fixed future epoch rather than as an evolving trajectory of risk over multiple days.
+- **Centralized and manual for avoidance decisions** — once a conjunction is flagged, deciding *who* maneuvers, *when*, and *how much* delta-v to spend is still largely a human, operator-by-operator process, which does not scale as constellations grow into the thousands (e.g., Starlink, OneWeb, Kuiper).
+
+### 1.4 Existing Industry Challenges
+
+| Challenge | Description |
+|---|---|
+| Catalog scale | Public catalogs (Space-Track) already track ~30,000+ trackable objects; mega-constellations push the *actively maneuverable* population into the thousands. |
+| Uncertainty | State vectors derived from TLEs carry significant, non-Gaussian, growing uncertainty between epochs. |
+| Coordination gap | No public, open system coordinates *multi-operator, multi-satellite* avoidance jointly — each operator optimizes for itself. |
+| Fuel is finite | Every avoidance maneuver spends delta-v that shortens mission life; unnecessary maneuvers are a real cost, not just a formality. |
+| Latency vs. accuracy | High-fidelity numerical propagation (special perturbations) is accurate but too slow to run continuously across a full mega-constellation graph; SGP4 is fast but approximate. |
+
+### 1.5 Research Motivation
+
+The intersection of **temporal graph learning** and **safe multi-agent RL**, applied to a **physically constrained, safety-critical, real-world dynamical system**, is an active and publishable research area. Most existing academic work addresses either (a) conjunction *prediction* as a supervised learning problem in isolation, or (b) collision avoidance as a single-satellite control problem. Treating the constellation as a dynamic graph and learning *both* forecasting and coordinated control jointly, under explicit physical constraints, is the project's core research angle. This must be validated against current literature before final scoping (see [Section 6.1](#61-phase-0-literature--novelty-audit-weeks-1-3)) — the mentor's role includes actively looking for prior art that undercuts this framing, not just supporting it.
+
+### 1.6 Why This Project Matters
+
+- **Practical relevance**: collision avoidance coordination is an acknowledged, unsolved operational problem, not a synthetic academic exercise.
+- **Feasibility with public data**: TLE/catalog data is freely available (Space-Track, CelesTrak), meaning the project does not depend on proprietary operator data to produce meaningful results.
+- **Technical breadth**: touches orbital mechanics, graph representation learning, multi-agent RL, and safety-constrained optimization — a genuine systems-integration challenge, not a single-model exercise.
+
+### 1.7 Expected Impact
+
+A working prototype that:
+- Demonstrably outperforms a pairwise-baseline conjunction screening approach on forecasting horizon and/or precision-recall, on public TLE data.
+- Demonstrates *coordinated* (not independent) maneuver planning across a small simulated constellation, with measurable fuel savings versus independent per-satellite avoidance.
+- Produces a reproducible codebase and a workshop/conference-ready paper.
+
+---
+
+## 2. Project Goals
+
+### Short-term goals (Months 1–3)
+- Finalize literature review and novelty framing.
+- Stand up data ingestion pipeline (TLE retrieval, propagation, dynamic graph construction).
+- Working conjunction-detection baseline (non-learned) as the comparison point.
+
+### Long-term goals (Months 4–8)
+- Trained TGNN conjunction-forecasting model beating the baseline on held-out epochs.
+- Trained MARL coordination policy in simulation, evaluated against independent-agent and rule-based baselines.
+- Physics-constrained optimization layer that converts policy output into feasible, fuel-costed maneuvers.
+
+### Research goals
+- A clearly stated, literature-grounded novel contribution (see Section 6.1).
+- Ablations that isolate *why* the approach works (graph structure, temporal component, coordination vs. independent agents).
+
+### Engineering goals
+- A reproducible, tested, documented codebase — not a notebook collection.
+- Clean separation between physics/simulation, learned models, and orchestration.
+
+### Publication goals
+- One workshop or conference submission (AIAA SciTech / IEEE Aerospace / NeurIPS-ICLR workshop track) by month 8–9.
+- Figures and tables built directly from experiment-tracking outputs, not hand-drawn after the fact.
+
+---
+
+## 3. System Overview
+
+At a high level, data flows through four stages:
+
+```mermaid
+flowchart LR
+    A[TLE / Catalog Data\nSpace-Track, CelesTrak] --> B[Propagation Layer\nSGP4 + perturbation models]
+    B --> C[Dynamic Graph Construction\nnodes=satellites, edges=proximity/risk]
+    C --> D[TGNN Conjunction Forecaster]
+    D --> E[Risk-Ranked Conjunction List\n+ predicted probability, time-to-closest-approach]
+    E --> F[MARL Coordination Layer\nmulti-agent policy]
+    F --> G[Physics-Constrained Optimization\nfeasibility + fuel costing]
+    G --> H[Maneuver Plan per Satellite]
+    H -.feedback.-> C
+```
+
+**Module responsibilities:**
+
+| Module | Input | Output | Owns |
 |---|---|---|---|
-| Orbital Mechanics Core (M1) | `constellai/orbital_mechanics/` | TLE ingestion, SGP4 propagation, frame transforms, perturbations, conjunction geometry | Dev A + Dev B |
-| Graph Construction (M2) | `constellai/graph/` | Dynamic graph construction, temporal windowing, feature engineering | Dev C |
-| TGNN Forecasting (M3) | `constellai/models/tgnn/` | Temporal GNN — conjunction probability / time-to-closest-approach | Dev C |
-| MARL Coordination (M4) | `constellai/models/marl/` | Multi-agent RL — coordinated avoidance maneuver policies | Dev D |
-| Simulation & Evaluation (M5) | `constellai/simulation/` | Independent ground-truth simulator, scenario generation, metrics | Dev A + Dev B |
-| Infra / MLOps (M6) | — | Experiment tracking, CI/CD, benchmarking | Dev D |
+| Data Ingestion | Raw TLE feeds | Cleaned, versioned orbital element sets | Propagation correctness, data freshness |
+| Propagation Layer | Orbital elements | State vectors (position/velocity) over time | SGP4 correctness, perturbation modeling |
+| Graph Constructor | State vectors | Time-indexed graph snapshots | Node/edge feature design, thresholds |
+| TGNN Forecaster | Graph sequence | Conjunction probability + time-to-approach per pair | Model architecture, training, calibration |
+| MARL Coordinator | Forecasted risk graph | Per-satellite action recommendations | Reward design, policy training, safety constraints |
+| Optimization Layer | Raw policy actions | Feasible, fuel-costed maneuver plans | Constraint satisfaction, delta-v budgeting |
+| Simulation & Evaluation | All of the above | Metrics, ablations, figures | Reproducibility, experiment tracking |
 
-Interface contracts between modules (units, frames, tensor shapes) are frozen in `docs/adr/` before implementation begins.
+Every module must be independently testable — the TGNN must be evaluable without the RL layer running, and the RL layer must be trainable against a frozen or mocked forecaster before end-to-end integration. This is deliberate: end-to-end-only systems are extremely hard to debug and even harder to defend to a reviewer asking "what does each component contribute?"
 
-## Repository Structure
+---
+
+## 4. Repository Structure
 
 ```
 constellai/
-├── constellai/
-│   ├── orbital_mechanics/      # M1
-│   ├── graph/                  # M2
+├── backend/
+│   ├── propagation/          # SGP4 wrappers, perturbation models, coordinate transforms
+│   ├── graph/                 # Dynamic graph construction, feature engineering
 │   ├── models/
-│   │   ├── tgnn/                # M3
-│   │   └── marl/                # M4
-│   ├── simulation/             # M5
-│   └── common/                  # shared constants, types, config schemas
-├── experiments/configs/         # one YAML per experiment run
+│   │   ├── tgnn/               # Temporal GNN architecture, training loop, inference
+│   │   └── marl/                # Agent policies, environment, training loop
+│   ├── optimization/          # Physics-constrained maneuver feasibility + delta-v costing
+│   ├── simulation/            # End-to-end simulated constellation environment
+│   └── api/                    # Serving layer (if/when a demo API is built)
+├── frontend/                  # Visualization dashboard (constellation state, risk, maneuvers)
+├── datasets/
+│   ├── raw/                    # Unmodified downloaded TLE/catalog snapshots (gitignored)
+│   ├── processed/              # Cleaned, versioned datasets actually used for training
+│   └── scripts/                # Download + preprocessing scripts (checked in)
+├── experiments/
+│   ├── configs/                 # One config file per experiment run
+│   ├── logs/                    # Experiment tracker output (gitignored, or DVC/W&B pointers)
+│   └── results/                 # Aggregated results tables/figures used in the paper
+├── notebooks/                  # Exploration only — nothing here is a dependency of backend/
+├── docs/
+│   ├── architecture/            # ADRs, diagrams, design docs
+│   ├── research-notes/          # Weekly research notes, literature summaries
+│   └── meeting-notes/           # Dated meeting logs
+├── papers/                     # LaTeX source for the eventual paper submission
 ├── tests/
 │   ├── unit/
 │   ├── integration/
-│   └── physics_validation/
-├── docs/
-│   ├── adr/                     # Architecture Decision Records
-│   └── research_log/
-└── paper/                        # LaTeX source, figures, tables
+│   └── e2e/
+├── scripts/                    # One-off utility / dev scripts
+├── .github/workflows/          # CI/CD definitions
+├── pyproject.toml / requirements.txt
+└── README.md                   # this file
 ```
 
-## Getting Started
+**Why this structure:**
+- `backend/models/tgnn` and `backend/models/marl` are siblings, not nested — they must be trainable and testable independently (see Section 3).
+- `datasets/raw` vs `datasets/processed` separation exists so preprocessing is always reproducible from raw data, and raw data is never mutated in place.
+- `notebooks/` is explicitly quarantined from `backend/` — nothing in production code should import from a notebook; the reverse (notebooks importing backend modules) is fine and encouraged.
+- `papers/` lives in the same repo (not a separate one) so figures generated in `experiments/results/` can be referenced directly without cross-repo sync pain — **[ASSUMPTION]**: revisit if the team prefers Overleaf.
+
+---
+
+## 5. Technology Stack
+
+> **[ASSUMPTION]** — the following stack is a recommended starting point based on your stated PyTorch/HuggingFace background ([[tech-stack]]) and the project's requirements. It has not been formally ratified by the full team and should be treated as a proposal for Week 1 discussion, not a locked decision.
+
+| Layer | Choice | Why chosen | Alternatives considered | Trade-off |
+|---|---|---|---|---|
+| Orbital propagation | `sgp4` (Python), `poliastro` / `skyfield` for higher-fidelity checks | Industry-standard TLE propagator; free, well-tested | Writing SGP4 from scratch (rejected: reinventing a validated, subtle algorithm is a research-time sink with no novelty payoff) | SGP4 itself has known accuracy limits vs. special perturbation methods — must be stated explicitly in the paper as a modeling assumption |
+| Graph deep learning | PyTorch Geometric (PyG) or DGL | Mature temporal-GNN support, active community, matches your existing PyTorch background | Building custom message-passing in raw PyTorch (rejected for time cost); JAX/Jraph (rejected: smaller community, steeper ramp for a 4-person undergrad team) | PyG has less mature temporal-graph tooling than static-graph tooling — team should evaluate `PyTorch Geometric Temporal` specifically early |
+| RL framework | RLlib or a lightweight custom MARL loop (PettingZoo + custom PPO) | RLlib has production-grade MAPPO/QMIX implementations; PettingZoo is the standard multi-agent env API | Writing MARL from scratch (rejected: correctness bugs in RL are notoriously hard to detect; use validated implementations first, customize once baseline works) | RLlib has a real learning curve and can feel like a black box — team must still understand the underlying algorithm, not just call the API |
+| Simulation environment | Custom, built on top of `sgp4`/`poliastro` state propagation, wrapped as a PettingZoo/Gym-style env | No existing open-source multi-satellite MARL environment fits this exact problem | Basilisk (AVS Lab) — a real, high-fidelity astrodynamics simulator; worth evaluating in Phase 0 as it may save significant engineering time versus a custom simulator | Basilisk has a steep setup/learning curve; custom sim is faster to start but risks accuracy gaps a reviewer will probe |
+| Experiment tracking | Weights & Biases (or MLflow if data-residency is a concern) | Minimal setup, good default dashboards, easy ablation comparison | Plain CSV logging (rejected: does not scale past week 2 with 4 people running parallel experiments) | W&B free tier has usage limits — check before committing |
+| Backend/API (if built) | FastAPI | Async support, automatic OpenAPI docs, matches Python-first stack | Flask/Django (rejected: heavier than needed for a research demo API) | Only needed if a live demo is required for the capstone presentation |
+| Frontend (if built) | React + a graph/orbit visualization library (e.g., Cesium.js or deck.gl for 3D orbit rendering) | Standard for interactive dashboards | Plotly Dash (simpler, less visually compelling for a "wow factor" demo) | 3D orbit visualization is a real engineering side-quest — scope it as nice-to-have, not core deliverable |
+| CI/CD | GitHub Actions | Free for public/student repos, directly integrated with GitHub workflow | GitLab CI, Jenkins (rejected: unnecessary infra overhead for a 4-person team) | — |
+| Version control (data/models) | DVC (Data Version Control) | Git-friendly versioning for datasets/checkpoints that are too large for git directly | Git LFS (viable alternative, less ML-specific tooling) | Adds a tool the team must learn — introduce it in Phase 1, not day 1 |
+
+---
+
+## 6. Development Roadmap
+
+### 6.1 Phase 0 — Literature & Novelty Audit (Weeks 1–3)
+
+- **Objectives**: Establish exactly what has and hasn't been done in TGNN-based conjunction prediction and MARL-based satellite coordination; identify the specific, defensible novelty claim.
+- **Deliverables**: A literature review document (`docs/research-notes/`) with a comparison table of at least 10–15 relevant papers, and a one-paragraph novelty statement reviewed by the mentor.
+- **Dependencies**: None — this is the true starting point, before any code.
+- **Expected output**: A go/no-go decision on the core research framing, and an explicit list of what will be simplified relative to the original brief (e.g., "we will support N≤50 satellites in simulation, not 'thousands', for the prototype, with a discussion of scaling in the paper").
+- **Completion criteria**: Mentor sign-off that the novelty claim is defensible and non-trivial.
+- **Possible challenges**: Discovering that a very similar system already exists (e.g., recent ESA/academic TGNN-conjunction papers) — if so, the differentiator must be found immediately, not after months of engineering.
+
+### 6.2 Phase 1 — Data & Simulation Foundation (Weeks 4–9)
+
+- Data ingestion pipeline; propagation correctness validated against known reference orbits.
+- Dynamic graph construction with a first pass at node/edge features.
+- Non-learned baseline conjunction screener (pairwise distance/threshold-based) — this is the number every learned model must beat.
+
+### 6.3 Phase 2 — TGNN Forecaster (Weeks 10–18)
+
+- Baseline static-GNN conjunction classifier first (simpler, establishes the graph-learning pipeline works at all).
+- Extend to temporal architecture (e.g., TGN, EvolveGCN, or a custom temporal-attention layer over graph snapshots — **[ASSUMPTION]**: exact architecture choice deferred to Phase 0/1 findings).
+- Calibration and evaluation against the Phase 1 baseline.
+
+### 6.4 Phase 3 — MARL Coordination (Weeks 19–28)
+
+- Single-agent RL sanity check first (one satellite, avoid one conjunction) before multi-agent.
+- Multi-agent training (MAPPO as the default starting algorithm — well-supported, comparatively stable to train relative to QMIX/MADDPG for continuous-ish action spaces).
+- Reward shaping iteration — this will take longer than planned; budget for it explicitly.
+
+### 6.5 Phase 4 — Integration & Physics-Constrained Optimization (Weeks 29–33)
+
+- Connect TGNN output → MARL input.
+- Add hard feasibility constraints (fuel budget, maneuver limits) as a constrained-optimization or action-masking layer.
+
+### 6.6 Phase 5 — Evaluation, Ablation, and Paper Writing (Weeks 34–40)
+
+- Full ablation suite (see Section 14).
+- Draft paper in parallel with final experiments, not after.
+
+*(This maps to the Weekly and Monthly plans in Sections 17–18; treat those as the operational detail behind this roadmap.)*
+
+---
+
+## 7. Detailed Implementation Guide
+
+> This section is intentionally left as a **living document skeleton** rather than fully populated code-by-code instructions, for one important reason stated plainly: writing a step-by-step "Step 1 → Step N" implementation guide for an architecture that hasn't cleared Phase 0 (novelty audit) would mean inventing implementation details not yet decided by the team — which conflicts directly with rule 10 of this brief ("if information is missing, state assumptions rather than inventing facts"). What follows is the structure to fill in as each phase is actually implemented.
+
+### Step template (to be repeated for every implementation step, starting from Phase 1)
+
+```
+### Step N: <name>
+**What to do:**
+**Why:**
+**Expected output:**
+**Commands:**
+**Files created/modified:**
+**Common mistakes:**
+**Validation:** (how do we know this step succeeded?)
+```
+
+**First concrete steps to populate once Phase 0 is signed off** (recommended order):
+1. Step 1 — Set up repo skeleton + CI skeleton (Section 4 structure, empty `tests/` passing a trivial CI check).
+2. Step 2 — TLE ingestion script: fetch a fixed snapshot from CelesTrak, store under `datasets/raw/`, write a test asserting expected record count/schema.
+3. Step 3 — SGP4 propagation wrapper: propagate a known reference TLE and validate output against a published reference ephemeris (validation, not just "it runs").
+4. Step 4 — Dynamic graph constructor: turn a sequence of propagated states into a graph snapshot sequence; unit test on a synthetic 3-satellite case with a known, hand-computed expected graph.
+
+Each subsequent step should be added to this section **as it is actually implemented**, by whichever team member owns that module, reviewed by at least one other member before merge (see Section 9).
+
+---
+
+## 8. Team Responsibilities
+
+> **[ASSUMPTION]** — names/skills of the other three members aren't specified yet in what's been shared with the mentor; roles below are structured around the *module boundaries* in Section 3, not around specific people. Substitute actual names once assigned.
+
+| Role | Primary modules | Deliverables | Core skills needed |
+|---|---|---|---|
+| **Member 1 — Orbital Mechanics & Data Lead** | Propagation, Data Ingestion | Validated propagation layer, versioned datasets | Orbital mechanics, SGP4, data engineering |
+| **Member 2 — Graph Learning Lead** | Graph Constructor, TGNN Forecaster | Trained/evaluated TGNN model, calibration report | GNNs, PyTorch, temporal modeling |
+| **Member 3 — RL Lead** | MARL Coordinator, Simulation environment | Trained MARL policy, environment code | RL theory, MAPPO/QMIX, environment design |
+| **Member 4 — Systems & Optimization Lead** | Optimization layer, API/Frontend, CI/CD | Feasibility layer, demo interface, working CI pipeline | Software architecture, optimization, DevOps |
+| **Industry Mentor** | Cross-cutting review | Weekly checkpoint reviews, go/no-go decisions at phase boundaries, literature/novelty gatekeeping, paper-quality review | Domain + research rigor across all of the above |
+
+**Review checkpoints (mentor):** end of each phase in Section 6, plus any point a team member requests unblock on a design decision.
+**Expected feedback style:** critique-first — assumptions and novelty claims challenged before implementation effort is spent (see the operating instructions from the earlier conversation in this project).
+
+---
+
+## 9. Git Workflow
+
+- **Branch strategy**: `main` (always deployable/reproducible) ← `develop` (integration) ← feature branches.
+- **Naming convention**: `feature/<module>-<short-desc>`, `fix/<module>-<short-desc>`, `experiment/<name>`.
+- **Commits**: Conventional Commits style — `feat(tgnn): add temporal attention layer`, `fix(propagation): correct J2 sign error`.
+- **Pull requests**: every PR into `develop` requires at least one reviewer from a *different* module than the author; PRs into `main` require mentor sign-off at phase boundaries.
+- **Code review**: focus on correctness of physics/math first, style second — a beautifully formatted but physically wrong propagation function is the higher-priority defect.
+- **Merge strategy**: squash-merge feature branches into `develop`; merge-commit `develop` into `main` at phase boundaries so phase history stays visible.
+- **Release strategy**: tag a release at each phase completion (`v0.1-phase1`, etc.) so experiment results can always be traced to an exact commit.
+- **Conflict resolution**: whoever opened the PR resolves conflicts against `develop` before requesting re-review; never resolve conflicts by silently accepting one side without re-reading both.
+
+---
+
+## 10. Development Standards
+
+- **Coding standards**: `black` + `ruff` (or `flake8`) enforced via pre-commit hook; type hints required on all public functions.
+- **Folder conventions**: as in Section 4 — no code outside its designated module folder without a documented reason in the PR description.
+- **Documentation standards**: every module has a `README.md` explaining its purpose and interface; every non-trivial function has a docstring stating units (this matters enormously in orbital mechanics — always state whether an angle is degrees or radians, whether time is seconds or days, etc.).
+- **Logging standards**: Python `logging` module, not `print`; structured logs for experiment runs.
+- **Error handling**: propagation/physics code should fail loudly (raise) on invalid input rather than silently returning a plausible-looking wrong answer — this is a safety-critical-adjacent domain even in simulation.
+- **Configuration management**: all experiment configs as versioned YAML/JSON under `experiments/configs/`, never hardcoded hyperparameters.
+- **Environment variables**: `.env.example` checked in; real `.env` gitignored.
+- **Secrets management**: no API keys or credentials (e.g., Space-Track login) committed; use environment variables or a secrets manager, never hardcoded.
+
+---
+
+## 11. Installation Guide
+
+> **[ASSUMPTION]** — exact OS/Python version pinned here as a starting recommendation; confirm as a team.
 
 ```bash
+# 1. Install Python 3.11+ (recommended)
+python3 --version   # verify
+
+# 2. Install Git
+git --version        # verify
+
+# 3. Clone the repository
 git clone https://github.com/<org>/constellai.git
 cd constellai
-poetry install
+
+# 4. Create a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+
+# 5. Install dependencies
+pip install -r requirements.txt
+
+# 6. Install pre-commit hooks
 pre-commit install
+
+# 7. Run backend tests to verify setup
 pytest tests/unit
+
+# 8. Run the frontend (if/when built)
+cd frontend
+npm install
+npm run dev
+
+# 9. Run backend locally (if/when an API layer exists)
+uvicorn backend.api.main:app --reload
+
+# 10. Run a simulation smoke test
+python -m backend.simulation.run --config experiments/configs/smoke_test.yaml
 ```
 
-## Roadmap
+Each command's expected output and common failure modes should be documented in this section as each piece is actually built — an installation guide for modules that don't exist yet would be fabricated instruction, which this document avoids per its own ground rules.
 
-- [ ] Step 0 — Environment & repo setup (CI, pre-commit, experiment tracking)
-- [ ] Step 1 — Literature review and gap analysis
-- [ ] Step 2 — M1 + M5: propagator validated against Vallado test vectors, ground-truth simulator
-- [ ] Step 3 — Non-ML baseline (TCA/miss-distance threshold)
-- [ ] Step 4 — M2 + M3: graph pipeline, TGNN prototype vs. baseline
-- [ ] Step 5 — M4: MARL environment, single-agent then multi-agent training
-- [ ] Step 6 — Integration: TGNN forecasts feed MARL state/reward
-- [ ] Step 7 — Scalability and sensitivity analysis
-- [ ] Step 8 — Paper and capstone prep
+---
 
-## Development Workflow
+## 12. Dataset Guide
 
-- Branching: `main` (protected, tagged per milestone) ← `develop` ← `feature/<module>-<desc>`
-- PRs target `develop`, minimum 1 reviewer; new models or physics assumptions require a `needs-science-review` tag
-- No hardcoded hyperparameters — experiment configs live in `experiments/configs/`
+| Aspect | Detail |
+|---|---|
+| Primary source | [Space-Track.org](https://www.space-track.org) (requires free registration) for authoritative TLE/catalog data; [CelesTrak](https://celestrak.org) for convenient public mirrors of common TLE sets |
+| Download process | Scripted retrieval via `datasets/scripts/`, never manual downloads, so every dataset snapshot is reproducible |
+| Directory placement | Raw snapshots → `datasets/raw/<source>/<date>/`; cleaned/derived → `datasets/processed/` |
+| Preprocessing | Deduplicate NORAD IDs, filter to relevant orbital regime (e.g., LEO only for the prototype), validate TLE checksum |
+| Cleaning | Drop malformed/expired TLEs; flag objects with propagation errors above a defined threshold |
+| Validation | Automated schema + sanity checks (epoch within expected range, orbital elements physically plausible) run as part of the ingestion pipeline, not manually |
+| Versioning | DVC-tracked or explicitly dated snapshot folders — every experiment config references an exact dataset version |
+| Expected size | A LEO-focused subset is on the order of several thousand objects per snapshot; exact figure depends on final scope decided in Phase 0 |
 
-## Team
+---
 
-Dev A, Dev B — M1, M5 · Dev C — M2, M3 · Dev D — M4, M6 · Industry Mentor — cross-module review
+## 13. Model Training Pipeline
 
-Integration lead rotates monthly.
+```mermaid
+flowchart TD
+    A[Processed graph snapshots] --> B[Feature engineering\norbital elements, derived proximity features]
+    B --> C[Train/val/test split\nby time, not randomly]
+    C --> D[TGNN training loop]
+    D --> E[Checkpoint saving\nversioned per experiment run]
+    E --> F[Evaluation on held-out future epochs]
+    F --> G[Metrics + calibration report]
+```
 
-## License
+- **Input**: sequences of graph snapshots with node features (orbital elements, object type) and edge features (relative distance, relative velocity, time-to-closest-approach).
+- **Processing**: normalization of physical quantities (critical — raw orbital element scales vary by orders of magnitude); temporal windowing.
+- **Feature engineering**: must be justified physically, not just empirically — e.g., relative velocity direction matters for collision geometry, not just magnitude.
+- **Training**: time-based train/val/test split is mandatory — a random split would leak future information into training, invalidating the forecasting claim entirely.
+- **Validation**: held-out future time windows only.
+- **Checkpoint saving**: every checkpoint tagged with exact config + data version.
+- **Evaluation**: precision/recall on conjunction *events* (not raw timesteps), calibration of predicted probabilities, and forecasting-horizon degradation curves (how much does accuracy drop at day+1 vs day+5?).
 
-TBD
+---
+
+## 14. Testing Strategy
+
+| Test type | Scope | Example |
+|---|---|---|
+| Unit tests | Individual functions | SGP4 wrapper matches reference ephemeris within tolerance |
+| Integration tests | Module-to-module interfaces | Graph constructor correctly consumes propagation layer output |
+| End-to-end tests | Full pipeline on a small fixed case | 3-satellite synthetic scenario runs ingestion → forecast → coordination → maneuver plan without error |
+| Performance tests | Scaling behavior | Graph construction and TGNN inference time vs. number of satellites (10, 100, 1000) |
+| Stress tests | Edge cases | Object re-entry, TLE gaps, extremely close conjunctions, malformed input data |
+| Validation datasets | Known ground truth | Historical, publicly documented close-approach or conjunction events used as sanity checks |
+
+**Ablation studies** (for the paper, not just engineering QA):
+- TGNN vs. static-GNN vs. non-learned baseline (isolates value of temporal modeling).
+- MARL coordinated policy vs. independent single-agent policies per satellite (isolates value of coordination).
+- With vs. without physics-constrained optimization layer (isolates value of the feasibility layer).
+
+**Sensitivity & scalability analysis**: performance vs. constellation size; performance vs. forecasting horizon; robustness to injected TLE noise.
+
+---
+
+## 15. Experiment Tracking
+
+- **Folder organization**: one config per experiment under `experiments/configs/`; results linked by experiment ID, not by memory.
+- **Naming convention**: `<phase>_<model>_<variant>_<date>` (e.g., `phase2_tgnn_temporal-attn_2026-09-01`).
+- **Model versioning**: every checkpoint tagged with git commit hash + dataset version + config hash.
+- **Metrics logging**: via W&B/MLflow — loss curves, calibration, precision/recall, delta-v cost, per-run.
+- **Result comparison**: dashboards comparing all runs within a phase side-by-side before any figure is finalized for the paper.
+- **Ablation studies**: tracked as their own experiment group, not mixed in with hyperparameter-tuning runs.
+
+---
+
+## 16. Documentation Strategy
+
+- **API documentation**: auto-generated from docstrings (e.g., via `mkdocs` + `mkdocstrings`) if/when an API layer is built.
+- **Architecture documentation**: Architecture Decision Records (ADRs) under `docs/architecture/` — one short markdown file per significant decision (e.g., "why MAPPO over QMIX"), including the alternatives considered and why rejected.
+- **Research notes**: weekly literature/experiment notes under `docs/research-notes/`, dated.
+- **Meeting notes**: every mentor checkpoint logged under `docs/meeting-notes/` with decisions and action items, not just discussion summary.
+- **Experiment logs**: linked from `experiments/results/` back to the relevant research note.
+- **Decision logs**: any deviation from this README's plan (e.g., scope cuts) logged as an ADR, not silently absorbed.
+
+---
+
+## 17. Weekly Development Plan
+
+> Populated in detail through Phase 0–1 (Weeks 1–9); later weeks will be refined as earlier phases complete — committing to detailed weekly tasks for Week 30 today would mean inventing plans that current unknowns (Phase 0 findings) will certainly change.
+
+| Week | Objective | Key tasks | Expected output | Risks |
+|---|---|---|---|---|
+| 1 | Literature review kickoff | Divide ~15 papers across 4 members; each summarizes 3–4 | Shared annotated bibliography | Team may find the exact idea already published — treat as a finding, not a failure |
+| 2 | Literature synthesis | Group discussion; identify gaps and candidate novelty angles | Draft novelty statement (v1) | Premature convergence on a novelty claim without enough papers reviewed |
+| 3 | Novelty audit sign-off | Mentor review of novelty statement; scope decisions (e.g., max constellation size for prototype) | Signed-off novelty statement + explicit scope document | Scope too ambitious relative to 8-10 month timeline |
+| 4 | Repo & CI bootstrap | Set up repo structure, pre-commit, CI skeleton, empty test suite passing | Green CI on trivial commit | Tooling setup eats more time than planned — timebox it |
+| 5 | Data ingestion v1 | TLE fetch script + raw storage + schema validation | Reproducible raw dataset snapshot | Space-Track rate limits / access approval delays |
+| 6 | Propagation validation | SGP4 wrapper + validation against reference ephemeris | Propagation unit tests passing with quantified accuracy | Coordinate frame bugs (a classic, easy-to-miss source of silent errors) |
+| 7 | Graph construction v1 | Define node/edge features; build snapshot graphs | Graph objects for a small fixed satellite set, tested | Feature choices not yet physically justified — flag for Phase 2 revisit |
+| 8 | Baseline conjunction screener | Non-learned pairwise threshold baseline | Baseline precision/recall numbers on validation data | Baseline may be stronger than expected, raising the bar for the TGNN |
+| 9 | Phase 1 wrap-up & review | Mentor review of Phase 1 deliverables | Go/no-go into Phase 2 | — |
+
+*(Weeks 10+ to be added at the start of Phase 2, following this same table format.)*
+
+---
+
+## 18. Monthly Deliverables
+
+| Month | Deliverable |
+|---|---|
+| Month 1 | Signed-off literature review + novelty statement + explicit scope document |
+| Month 2 | Working data ingestion + propagation pipeline with validated accuracy; non-learned baseline screener |
+| Month 3 | Graph construction pipeline finalized; Phase 1 complete |
+| Month 4 | Static-GNN conjunction classifier working end-to-end |
+| Month 5 | Temporal TGNN architecture trained; first comparison vs. baseline |
+| Month 6 | TGNN evaluation/calibration complete; single-agent RL sanity check working |
+| Month 7 | Multi-agent MARL policy trained in simulation; first coordination results |
+| Month 8 | Physics-constrained optimization layer integrated; full pipeline running end-to-end |
+| Month 9 | Full ablation suite complete; paper draft v1 |
+| Month 10 (buffer) | Final experiments, paper revision, capstone demo polish |
+
+*(A 10-month version is shown; compress proportionally if the team has confirmed 8 months — flag this explicitly at Phase 0 sign-off.)*
+
+---
+
+## 19. Future Scope
+
+Stated realistically, not aspirationally:
+
+- **Scale beyond prototype size** to the full mega-constellation regime (thousands of satellites) — likely requires hierarchical or clustered graph approaches not in scope for this prototype.
+- **Multi-operator coordination** (not just multi-satellite within one simulated constellation) — a genuinely harder game-theoretic problem (operators may not share full state or trust each other's reported intentions).
+- **Real conjunction data validation** — partnering with an actual operator or agency to validate against real historical maneuver decisions, beyond public catalog data.
+- **Higher-fidelity propagation** (special perturbations instead of SGP4) for the final risk-assessment stage, using the learned model only for triage/screening.
+- **Online/continual learning** as the catalog and constellation evolve, rather than a static trained model.
+
+---
+
+## 20. References
+
+*(Populated by the team during Phase 0; format below, fill in during literature review — no papers are pre-listed here since specific titles have not been confirmed as read/reviewed by the team.)*
+
+**Books**
+- Vallado, D. — *Fundamentals of Astrodynamics and Applications* (standard graduate orbital mechanics reference)
+- Sutton & Barto — *Reinforcement Learning: An Introduction*
+
+**Research paper categories to review** (fill in specific citations as reviewed):
+- TLE/SGP4-based conjunction assessment methods
+- Temporal graph neural network architectures (TGN, EvolveGCN, etc.)
+- Multi-agent RL for cooperative control (MAPPO, QMIX, MADDPG, COMA papers)
+- Safe RL / constrained RL for safety-critical control
+- Space traffic management policy and operational literature (AIAA, ESA reports)
+
+**Official documentation**
+- Space-Track.org API documentation
+- CelesTrak TLE format documentation
+- PyTorch Geometric / DGL documentation
+- RLlib / PettingZoo documentation
+
+**Industry resources**
+- ESA Space Debris Office publications
+- LeoLabs technical blog (industry conjunction-tracking perspective)
+
+---
+
+## 21. Contributor Guide
+
+**For a new contributor joining mid-project:**
+
+1. Read this README fully before opening any code.
+2. Read the ADRs under `docs/architecture/` to understand *why* current decisions were made, not just what they are.
+3. Set up your environment per Section 11.
+4. Run the full test suite; it should pass on a clean checkout — if it doesn't, that's a bug worth flagging immediately, not working around.
+5. Pick up an issue tagged `good-first-issue` (or ask the module owner for a small, well-scoped starting task).
+6. Open a draft PR early, even before the work is complete, to get early feedback on direction.
+
+**Coding expectations**: match existing module style; add tests for new functionality (see Section 14); no PR merges without at least one review.
+
+**Documentation expectations**: any new module gets a `README.md`; any non-obvious design decision gets an ADR.
+
+---
+
+## 22. Troubleshooting
+
+| Issue | Likely cause | Solution |
+|---|---|---|
+| SGP4 propagation gives wildly wrong positions | Wrong epoch reference frame or units mismatch (degrees vs radians) | Check units at every function boundary; add explicit unit assertions |
+| CI fails only on GitHub Actions, not locally | Environment/dependency version mismatch | Pin exact versions in `requirements.txt`; match CI Python version to local |
+| TGNN training loss doesn't decrease | Unnormalized input features (common with raw orbital elements) | Verify feature normalization; check for NaNs from degenerate orbits |
+| MARL policy converges to trivial "never maneuver" behavior | Reward not penalizing missed avoidance enough, or fuel-cost penalty dominating | Revisit reward shaping (see Section 6.4); this is a very common early MARL failure mode, not a bug in the framework |
+| Dataset download fails intermittently | Space-Track/CelesTrak rate limiting | Add retry/backoff logic; cache raw downloads locally |
+| Experiment results not reproducible | Missing config/data version pinning | Always log commit hash + data version + config hash with every run (Section 15) |
+
+*(Expand this table continuously as real issues are hit — a troubleshooting section written in advance of actually building the system can only list generic, predictable issues, which is exactly what's shown above; real ones should be added as encountered.)*
+
+---
+
+## 23. FAQ
+
+**Q: Why not just use an existing conjunction-screening tool and focus only on the RL coordination piece?**
+A: That's a legitimate scope-reduction option and should be seriously considered at Phase 0 if the TGNN forecasting piece turns out not to add a defensible novel contribution on its own — better to cut scope deliberately than dilute effort across two under-baked contributions.
+
+**Q: Why start with SGP4 instead of higher-fidelity propagation?**
+A: Speed and universality — SGP4 is what's compatible with public TLE data at scale. The accuracy limitation is a known, citable trade-off, not a hidden flaw, and should be stated explicitly in any resulting paper.
+
+**Q: What if our novelty claim turns out to already exist in the literature?**
+A: That is the entire purpose of Phase 0 — better to find this in week 2 than month 6. It is a normal outcome of a literature review, not a project failure, and the response is to refine the differentiator, not abandon the project.
+
+**Q: Do we need real operator collaboration to publish?**
+A: No — public TLE-based prototypes with clearly stated limitations are a normal, accepted basis for a workshop/conference submission at this level.
+
+**Q: What if the 8–10 month timeline is too short for the full scope described in Section 1?**
+A: Very likely, honestly — the roadmap in Section 6 already assumes some scope reduction from the original full vision (see the Phase 0 explicit scope document requirement). This should be revisited candidly at each phase boundary rather than assumed away.
+
+---
+
+## 24. Appendix
+
+### Useful commands
+```bash
+pytest tests/unit -v                     # run unit tests verbosely
+pytest tests/integration                 # run integration tests
+pre-commit run --all-files               # lint/format check
+python -m backend.simulation.run --help  # simulation CLI help
+```
+
+### Folder templates
+See Section 4 for the canonical structure; copy the `backend/models/tgnn/` layout as a template for any new model module (`__init__.py`, `model.py`, `train.py`, `evaluate.py`, `README.md`).
+
+### Naming conventions
+- Python: `snake_case` for functions/variables, `PascalCase` for classes.
+- Experiment configs: `<phase>_<model>_<variant>_<date>.yaml`.
+- Branches/commits: see Section 9.
+
+### Glossary
+| Term | Meaning |
+|---|---|
+| TLE | Two-Line Element set — the standard compact representation of an orbit used with SGP4 |
+| SGP4 | Simplified General Perturbations model 4 — standard fast orbital propagator for TLE data |
+| Conjunction | A close approach between two objects in orbit |
+| TGNN | Temporal Graph Neural Network — a GNN architecture that models graphs evolving over time |
+| MARL | Multi-Agent Reinforcement Learning |
+| MAPPO | Multi-Agent Proximal Policy Optimization |
+| Delta-v | Change in velocity required for a maneuver — the standard currency of fuel cost in astrodynamics |
+| J2 perturbation | The dominant orbital perturbation caused by Earth's oblateness |
+
+### Research terminology
+- **Ablation study**: an experiment that removes/isolates one component to measure its individual contribution.
+- **Calibration**: how well a model's predicted probabilities match observed frequencies.
+- **Held-out future epoch**: a time-based (not random) validation split, required for any forecasting claim to be valid.
+
+---
+
+## 25. Closing Recommendations (from the Mentor role)
+
+Per the brief's own rule 11, here are direct, unsoftened recommendations rather than a purely descriptive close:
+
+1. **Do not skip Phase 0.** The single biggest risk to this project is discovering in month 5 that the core novelty claim doesn't hold up. Spend real weeks 1–3 on literature, not a token review.
+2. **Scope down explicitly, in writing.** "Thousands of satellites" and full multi-operator coordination are very unlikely to be achievable at prototype fidelity in 8–10 months with 4 undergraduate contributors. State the actual prototype scale (tens to low hundreds of simulated satellites is a defensible, honest target) in the Phase 0 scope document, and frame the larger vision as future work — reviewers respect honest scoping far more than an overclaimed abstract that the results don't support.
+3. **Build the non-learned baseline before any learned model.** Every claimed improvement is meaningless without a credible baseline number to beat, and validating the baseline forces the team to get the physics/data pipeline right first, when it's cheapest to fix.
+4. **Treat reward design in Section 6.4 as its own multi-week research task**, not an implementation afterthought — reward mis-specification is the most common reason MARL projects silently fail to produce meaningful coordination behavior.
+5. **Keep a written decision log (ADRs) from week 1.** Reviewers and the mentor will ask "why did you choose X over Y" at every stage — having that answer already written down, made in real time rather than reconstructed after the fact, will materially strengthen both code reviews and the eventual paper's related-work/design-justification sections.
+6. **Revisit this README itself at every phase boundary.** Several sections here are explicitly marked [ASSUMPTION] or left as skeletons because concrete decisions don't exist yet — this document should evolve with the project, not remain frozen as a Week-1 artifact that stops matching reality by Month 3.
