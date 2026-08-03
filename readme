@@ -1,18 +1,8 @@
-<div align="center">
-
 # ConstellAI
 
 **Physics-Informed Autonomous Orbital Intelligence for Space Traffic Management**
 
 Temporal Graph Neural Networks + Multi-Agent Reinforcement Learning for constellation-scale conjunction forecasting and collision-avoidance coordination.
-
-![Status](https://img.shields.io/badge/status-active--development-yellow)
-![Python](https://img.shields.io/badge/python-3.11%2B-blue)
-![License](https://img.shields.io/badge/license-TBD-lightgrey)
-![Timeline](https://img.shields.io/badge/timeline-8--10%20months-informational)
-
-</div>
-
 ---
 
 ## Table of Contents
