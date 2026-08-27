@@ -1,0 +1,22 @@
+[project]
+name = "constellai"
+version = "0.1.0"
+description = "Physics-informed anticipatory orbital intelligence for space traffic management"
+requires-python = ">=3.11"
+dependencies = [
+    "sgp4>=2.27",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["constellai*"]
