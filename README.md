@@ -649,3 +649,63 @@ Copy the `backend/models/tgnn/` layout as a template for any new model module (`
 4. **Treat reward design (Section 6.4) as its own multi-week research task**, not an implementation afterthought.
 5. **Keep a written decision log (ADRs) from week 1.** Reviewers will ask "why X over Y" at every stage.
 6. **Revisit this README at every phase boundary.** Several sections are marked [ASSUMPTION] or left as skeletons on purpose — this document should evolve with the project, and every Goal/Definition of Done above should be checked off explicitly, not assumed met.
+
+```
+constellAI
+├─ constellai
+│  ├─ common
+│  ├─ constellai
+│  │  ├─ common
+│  │  │  └─ constants.py
+│  │  ├─ graph
+│  │  │  ├─ filters.py
+│  │  │  ├─ screening.py
+│  │  │  └─ __init__.py
+│  │  ├─ orbital_mechanics
+│  │  │  ├─ conjunction.py
+│  │  │  ├─ propagation.py
+│  │  │  ├─ regime.py
+│  │  │  ├─ synthetic.py
+│  │  │  ├─ tle.py
+│  │  │  └─ __init__.py
+│  │  └─ simulation
+│  │     ├─ baseline.py
+│  │     └─ __init__.py
+│  ├─ graph
+│  │  ├─ filters.py
+│  │  ├─ screening.py
+│  │  └─ __init__.py
+│  ├─ models
+│  ├─ orbital_mechanics
+│  │  ├─ conjunction.py
+│  │  ├─ propagation.py
+│  │  ├─ regime.py
+│  │  ├─ synthetic.py
+│  │  └─ tle.py
+│  ├─ pyproject.toml
+│  ├─ simulation
+│  │  ├─ baseline.py
+│  │  └─ __init__.py
+│  └─ tests
+│     ├─ physics_validation
+│     │  └─ test_vallado_reference.py
+│     └─ unit
+│        ├─ test_baseline.py
+│        ├─ test_conjunction.py
+│        ├─ test_regime.py
+│        ├─ test_synthetic.py
+│        └─ test_tle.py
+├─ README.md
+└─ tests
+   ├─ physics_validation
+   │  ├─ test_vallado_reference.py
+   │  └─ __init__.py
+   └─ unit
+      ├─ test_baseline.py
+      ├─ test_conjunction.py
+      ├─ test_filters.py
+      ├─ test_screening.py
+      ├─ test_tle.py
+      └─ __init__.py
+
+```
