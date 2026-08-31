@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: constellai
+Version: 0.1.0
+Summary: Physics-informed anticipatory orbital intelligence for space traffic management
+Requires-Python: >=3.11
+Requires-Dist: sgp4>=2.27
+Requires-Dist: numpy>=1.26
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
