@@ -4,7 +4,7 @@ exhaustive baseline flags as risky (coarse-filter stage, specifically)."""
 from datetime import datetime, timedelta
 
 from constellai.orbital_mechanics.synthetic import make_circular_satellite
-from constellai.simulation.false_negative_gate import run_false_negative_gate
+from constellai.graph.validation import run_false_negative_gate
 
 START = datetime(2026, 1, 1)
 END = START + timedelta(hours=1)
