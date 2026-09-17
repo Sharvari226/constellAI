@@ -1,5 +1,6 @@
 sgp4>=2.27
 numpy>=1.26
+torch>=2.0
 
 [dev]
 pytest>=8.0
