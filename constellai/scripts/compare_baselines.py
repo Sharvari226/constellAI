@@ -1,15 +1,17 @@
 """Multi-scenario, multi-seed comparison: naive persistence vs LSTM vs
-static GNN vs TGN-lite.
+static GNN vs TGN-lite (point-estimate and uncertainty-aware).
 
 All three learned models train on the SAME train_scenarios and the SAME
-candidate-pair population (M2's candidate_pairs_by_regime). All three
-now ALSO run across multiple seeds and report mean + [min-max] AP --
-LSTM and GNN were previously unseeded, meaning a single run was one
-random draw from training stochasticity, not a reproducible result;
-run-to-run swings of 0.28-0.51 (LSTM) and 0.24-0.33 (GNN) were observed
-purely from this, with no code changes -- exactly the kind of thing
-this project's own principles require catching before drawing a
-conclusion from it.
+candidate-pair population (M2's candidate_pairs_by_regime). LSTM, GNN,
+and TGN-lite all run across multiple seeds and report mean + [min-max]
+AP -- LSTM/GNN were previously unseeded, meaning a single run was one
+random draw from training stochasticity, not a reproducible result.
+
+TGN-lite runs TWICE: once with the original point-estimate risk head
+(BCE loss), once with the Beta-distribution uncertainty head (Beta-NLL
+loss) -- the second run also reports Expected Calibration Error (ECE),
+answering this project's secondary hypothesis (H2): does calibrated
+uncertainty actually improve calibration, not just exist as a feature.
 
 TGN-lite still runs at a coarser time step (STEP_TGN) and a smaller test
 set than LSTM/GNN -- genuinely acknowledged limitations, not fixed here.
@@ -25,11 +27,20 @@ import torch
 
 from constellai.models.tgnn.dataset import build_forecast_examples
 from constellai.models.tgnn.dynamic_graph import build_dynamic_graph
-from constellai.models.tgnn.evaluation import average_precision, precision_recall_accuracy
+from constellai.models.tgnn.evaluation import (
+    average_precision,
+    expected_calibration_error,
+    precision_recall_accuracy,
+)
 from constellai.models.tgnn.gnn_baseline import EdgeRiskGNN, train_one_epoch as train_gnn_epoch
 from constellai.models.tgnn.graph_dataset import build_graph_snapshot
 from constellai.models.tgnn.lstm_baseline import PairRiskLSTM
-from constellai.models.tgnn.tgn_lite import TGNLite, forward_and_score
+from constellai.models.tgnn.tgn_lite import (
+    TGNLite,
+    beta_nll_loss,
+    forward_and_score,
+    forward_and_score_with_uncertainty,
+)
 from constellai.orbital_mechanics.synthetic import make_circular_satellite
 
 STEP = timedelta(minutes=2)
@@ -44,9 +55,9 @@ SATS_PER_SCENARIO = 30
 N_TRAIN_SCENARIOS = 6
 N_TEST_SCENARIOS = 6
 
-N_SEEDS = 3  # now shared across LSTM, GNN, and TGN-lite -- was TGN-lite-only before
+N_SEEDS = 3
 N_TGN_TEST_SCENARIOS = 3
-TGN_EPOCHS = 50
+TGN_EPOCHS = 8
 LSTM_EPOCHS = 15
 GNN_EPOCHS = 50
 
@@ -106,7 +117,6 @@ def run_lstm(train_scenarios, test_scenarios, margin_km):
         aps.append(average_precision(scores, labels))
         pooled_scores.append(scores)
 
-    # "pooled" prediction for precision/recall/accuracy: average score per example across seeds
     avg_scores = [sum(s[i] for s in pooled_scores) / N_SEEDS for i in range(len(test_ex))]
     preds = [int(s > 0.5) for s in avg_scores]
 
@@ -196,8 +206,9 @@ def run_tgn_one_seed(seed, train_scenarios, test_scenarios):
 
     model = TGNLite()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    for _ in range(TGN_EPOCHS):
-        train_tgn_one_epoch(model, train_graphs, pos_weight, optimizer)
+    for epoch in range(TGN_EPOCHS):
+        loss = train_tgn_one_epoch(model, train_graphs, pos_weight, optimizer)
+        print(f"    [seed {seed}] epoch {epoch+1}/{TGN_EPOCHS}, loss={loss:.4f}", flush=True)
 
     model.eval()
     scores, labels = [], []
@@ -231,6 +242,58 @@ def run_tgn(train_scenarios, test_scenarios):
     }
 
 
+def train_tgn_one_epoch_uncertainty(model, train_graphs, optimizer):
+    total_loss = 0.0
+    for graph in train_graphs:
+        optimizer.zero_grad()
+        alphas, betas, labels = forward_and_score_with_uncertainty(model, graph)
+        if alphas.numel() == 0:
+            continue
+        loss = beta_nll_loss(alphas, betas, torch.tensor(labels, dtype=torch.float))
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+    return total_loss / len(train_graphs)
+
+
+def run_tgn_one_seed_uncertainty(seed, train_scenarios, test_scenarios):
+    torch.manual_seed(seed)
+    train_graphs = [
+        build_dynamic_graph(s, OBS_START, OBS_END, HORIZON_END, STEP_TGN, MARGIN_KM, THRESHOLD_KM)
+        for s in train_scenarios
+    ]
+    model = TGNLite()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    for epoch in range(TGN_EPOCHS):
+        loss = train_tgn_one_epoch_uncertainty(model, train_graphs, optimizer)
+        print(f"    [seed {seed}, uncertainty] epoch {epoch+1}/{TGN_EPOCHS}, loss={loss:.4f}", flush=True)
+
+    model.eval()
+    scores, labels = [], []
+    with torch.no_grad():
+        for test_scenario in test_scenarios:
+            test_graph = build_dynamic_graph(test_scenario, OBS_START, OBS_END, HORIZON_END, STEP_TGN, MARGIN_KM, THRESHOLD_KM)
+            alphas, betas, lab = forward_and_score_with_uncertainty(model, test_graph)
+            if alphas.numel() == 0:
+                continue
+            means = (alphas / (alphas + betas)).tolist()
+            scores.extend(means)
+            labels.extend(lab)
+    return scores, labels
+
+
+def run_tgn_uncertainty(train_scenarios, test_scenarios):
+    aps, eces = [], []
+    for seed in range(N_SEEDS):
+        scores, labels = run_tgn_one_seed_uncertainty(seed, train_scenarios, test_scenarios)
+        aps.append(average_precision(scores, labels))
+        eces.append(expected_calibration_error(scores, labels))
+    return {
+        "ap_mean": sum(aps) / len(aps), "ap_min": min(aps), "ap_max": max(aps),
+        "ece_mean": sum(eces) / len(eces),
+    }
+
+
 def main():
     train_scenarios = [make_scenario(seed=i, id_offset=i * 100) for i in range(N_TRAIN_SCENARIOS)]
     test_scenarios = [make_scenario(seed=1000 + i, id_offset=1000 + i * 100) for i in range(N_TEST_SCENARIOS)]
@@ -240,7 +303,7 @@ def main():
     lstm_results = run_lstm(train_scenarios, test_scenarios, MARGIN_KM)
     print(f"training static GNN across {N_SEEDS} seeds...")
     gnn_results = run_gnn(train_scenarios, test_scenarios)
-    print(f"training TGN-lite across {N_SEEDS} seeds -- this is the slow part...")
+    print(f"training TGN-lite (point estimate) across {N_SEEDS} seeds...")
     tgn_results = run_tgn(train_scenarios, tgn_test_scenarios)
 
     print(f"\nLSTM pool: {lstm_results['n_examples']} pairs, {lstm_results['n_positive']} positive "
@@ -259,6 +322,14 @@ def main():
     ]
     for name, ap_str, r in rows:
         print(f"{name:<20}{ap_str:>28}{r['precision']:>12.3f}{r['recall']:>10.3f}{r['accuracy']:>10.3f}")
+
+    print(f"\ntraining TGN-lite WITH uncertainty head (Beta-NLL) across {N_SEEDS} seeds...")
+    tgn_uncertainty_results = run_tgn_uncertainty(train_scenarios, tgn_test_scenarios)
+    print(f"TGN-lite (point estimate):    AP {tgn_results['tgn']['ap_mean']:.3f} "
+          f"[{tgn_results['tgn']['ap_min']:.2f}-{tgn_results['tgn']['ap_max']:.2f}]")
+    print(f"TGN-lite (uncertainty-aware): AP {tgn_uncertainty_results['ap_mean']:.3f} "
+          f"[{tgn_uncertainty_results['ap_min']:.2f}-{tgn_uncertainty_results['ap_max']:.2f}], "
+          f"ECE {tgn_uncertainty_results['ece_mean']:.4f}")
 
 
 if __name__ == "__main__":

@@ -78,8 +78,8 @@ class TGNLite(nn.Module):
         """
         pair_input = torch.cat([memory[node_a], memory[node_b], last_features])
         raw = self.risk_head(pair_input.unsqueeze(0)).squeeze()
-        alpha = nn.functional.softplus(raw[0]) + 1e-3
-        beta = nn.functional.softplus(raw[1]) + 1e-3
+        alpha = nn.functional.softplus(raw[0]).clamp(max=100.0) + 1e-3
+        beta = nn.functional.softplus(raw[1]).clamp(max=100.0) + 1e-3
         return alpha, beta
 
     def predict_pair(self, memory: torch.Tensor, node_a: int, node_b: int, last_features: torch.Tensor) -> torch.Tensor:

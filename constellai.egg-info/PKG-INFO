@@ -6,6 +6,7 @@ Requires-Python: >=3.11
 Requires-Dist: sgp4>=2.27
 Requires-Dist: numpy>=1.26
 Requires-Dist: torch>=2.0
+Requires-Dist: scipy>=1.11
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0; extra == "dev"
 Requires-Dist: pytest-cov; extra == "dev"

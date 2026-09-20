@@ -1,0 +1,29 @@
+* [33m20dad4d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m M2 complete (false-negative gate validated); M3 bug fixes (population mismatch, training-volume confound, memory-detachment fix, uncertainty head); M4 foundation (HCW dynamics, environment, rung-1 single-agent policy with confirmed learning) — 63/63 tests passing
+* [33mb980165[m M1 + M2 complete: orbital mechanics, sparse graph construction, false-negative validation gate (46/46 tests passing)
+*   [33m805834d[m[33m ([m[1;31morigin/main[m[33m)[m Merge pull request #3 from Sharvari226/models-anj
+[32m|[m[33m\[m  
+[32m|[m * [33mbaa1f4f[m[33m ([m[1;31morigin/models-anj[m[33m)[m tgn without improv
+* [33m|[m [33mbcd3051[m Merge pull request #2 from Sharvari226/models-anj
+[34m|[m[33m\[m[33m|[m 
+[34m|[m * [33m3901a79[m static gnn w/o improv
+[34m|[m[34m/[m  
+* [33m6cc1c55[m Update README.md
+*   [33m43cb43e[m Merge pull request #1 from Sharvari226/models-anj
+[36m|[m[1;31m\[m  
+[36m|[m * [33mb2fe6ce[m fixed repo + lstm baseline
+[36m|[m[36m/[m  
+*   [33m1eca6b2[m Merge remote README
+[1;32m|[m[1;33m\[m  
+[1;32m|[m * [33m8e277bf[m Delete readme
+[1;32m|[m * [33me6c024d[m Describe your changes
+[1;32m|[m *   [33mb770e08[m Your commit message
+[1;32m|[m [1;34m|[m[1;35m\[m  
+[1;32m|[m [1;34m|[m * [33m1af127d[m Fix formatting issue in README
+[1;32m|[m [1;34m|[m * [33m27f11f6[m Change greeting from 'Hello' to 'Goodbye'
+[1;32m|[m [1;34m|[m * [33md9b5302[m Update readme
+[1;32m|[m [1;34m|[m * [33mc821927[m Update readme
+[1;32m|[m [1;34m|[m * [33md4007d3[m Update readme
+[1;32m|[m [1;34m|[m * [33m78a8439[m Update readme
+[1;32m|[m [1;34m|[m * [33m534c84f[m Initialize README with project details and setup steps
+[1;32m|[m * [33m29f9416[m Initial commit
+* [33mac09c09[m Initial commit
