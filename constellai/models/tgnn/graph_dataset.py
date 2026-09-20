@@ -1,14 +1,10 @@
 """Builds one graph snapshot for the static-GNN baseline.
 
-Nodes = satellites. Edges = M2's coarse-filter candidate pairs. Edge
-labels use the same forecast horizon split as the LSTM baseline
-(dataset.py) -- features from an observation window, label from a
-later, disjoint horizon window.
-
-Edge features now include relative speed at the last observed instant,
-alongside relative position and separation -- matching dataset.py and
-dynamic_graph.py so all three models see comparable features, not just
-a comparable pair population.
+Nodes = satellites. Edges = M2's coarse-filter candidate pairs (this is
+the actual M2->M3 bridge point: the sparse graph IS the coarse filter's
+output, not a separate invention). Edge labels use the same forecast
+horizon split as the LSTM baseline (dataset.py) -- features from an
+observation window, label from a later, disjoint horizon window.
 """
 
 from __future__ import annotations
@@ -28,7 +24,7 @@ class GraphSnapshot:
     node_ids: list[str]
     node_features: np.ndarray  # (N, 4): last position_km (3) + speed_km_s (1)
     edge_index: np.ndarray  # (E, 2) int, indices into node_ids
-    edge_features: np.ndarray  # (E, 5): last-observed [dx, dy, dz, sep_km, rel_speed_km_s]
+    edge_features: np.ndarray  # (E, 4): last-observed [dx, dy, dz, sep_km]
     edge_labels: np.ndarray  # (E,) int: 1 if horizon min-sep < threshold_km
 
 
@@ -60,10 +56,8 @@ def build_graph_snapshot(
     edge_index, edge_features, edge_labels = [], [], []
     for a, b in candidate_pairs:
         last_a, last_b = obs_states[a.satellite_id][-1], obs_states[b.satellite_id][-1]
-        rel_pos = last_a.position_km - last_b.position_km
-        sep = float(np.linalg.norm(rel_pos))
-        rel_vel = last_a.velocity_km_s - last_b.velocity_km_s
-        rel_speed = float(np.linalg.norm(rel_vel))
+        rel = last_a.position_km - last_b.position_km
+        sep = float(np.linalg.norm(rel))
 
         h_a, h_b = horizon_states[a.satellite_id], horizon_states[b.satellite_id]
         horizon_sep = np.linalg.norm(
@@ -72,13 +66,13 @@ def build_graph_snapshot(
         label = int(horizon_sep.min() < threshold_km) if len(horizon_sep) else 0
 
         edge_index.append((id_to_idx[a.satellite_id], id_to_idx[b.satellite_id]))
-        edge_features.append([*rel_pos, sep, rel_speed])
+        edge_features.append([*rel, sep])
         edge_labels.append(label)
 
     return GraphSnapshot(
         node_ids=node_ids,
         node_features=node_features,
         edge_index=np.array(edge_index, dtype=np.int64).reshape(-1, 2),
-        edge_features=np.array(edge_features, dtype=np.float32).reshape(-1, 5),
+        edge_features=np.array(edge_features, dtype=np.float32).reshape(-1, 4),
         edge_labels=np.array(edge_labels, dtype=np.int64),
     )

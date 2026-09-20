@@ -6,10 +6,10 @@ ordered by time, not baked into fixed snapshots.
 Candidate pairs come from M2's coarse filter (same false-negative
 guarantee already validated in graph/validation.py); each candidate
 pair contributes one event per observation timestep, since satellite
-conjunctions don't happen at neat intervals and precision matters here.
-
-Features now include relative speed (closing rate), matching
-dataset.py and graph_dataset.py -- not just position and separation.
+conjunctions don't happen at neat intervals and precision matters here
+(per propagation.py's own docstring warning against reusing
+fixed-interval sampling for this exact purpose -- accepted for now to
+keep the bridge simple; event-driven sampling is a documented follow-up).
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ class GraphEvent:
     t_index: int  # position in the chronological event stream
     node_a: int
     node_b: int
-    features: np.ndarray  # shape (5,): dx, dy, dz, separation_km, rel_speed_km_s
+    features: np.ndarray  # shape (4,): dx, dy, dz, separation_km
 
 
 @dataclass(frozen=True)
@@ -64,14 +64,9 @@ def build_dynamic_graph(
         states_a, states_b = obs_states[a.satellite_id], obs_states[b.satellite_id]
 
         for t_idx, (sa, sb) in enumerate(zip(states_a, states_b)):
-            rel_pos = sa.position_km - sb.position_km
-            sep = float(np.linalg.norm(rel_pos))
-            rel_vel = sa.velocity_km_s - sb.velocity_km_s
-            rel_speed = float(np.linalg.norm(rel_vel))
-            events.append(GraphEvent(
-                t_idx, idx_a, idx_b,
-                np.array([*rel_pos, sep, rel_speed], dtype=np.float32),
-            ))
+            rel = sa.position_km - sb.position_km
+            sep = float(np.linalg.norm(rel))
+            events.append(GraphEvent(t_idx, idx_a, idx_b, np.array([*rel, sep], dtype=np.float32)))
 
         h_a, h_b = horizon_states[a.satellite_id], horizon_states[b.satellite_id]
         horizon_sep = np.linalg.norm(

@@ -26,12 +26,9 @@ from sgp4.conveniences import sat_epoch_datetime
 from constellai.orbital_mechanics.propagation import propagate
 from constellai.orbital_mechanics.tle import parse_tle
 
-# fmt: off
 LINE1 = "1 00005U 58002B   00179.78495062  .00000023  00000-0  28098-4 0  4753"
 LINE2 = "2 00005  34.2682 348.7242 1859667 331.7664  19.3264 10.82419157413667"
 
-# (minutes since epoch, expected position_km (x,y,z), expected velocity_km_s (x,y,z))
-# Copied verbatim from python-sgp4's bundled tcppver.out for satellite 00005.
 REFERENCE_VECTORS = [
     (0.0,
      (7022.46529266, -1400.08296755, 0.03995155),
@@ -46,12 +43,7 @@ REFERENCE_VECTORS = [
      (-938.55923943, -6268.18748831, -4294.02924751),
      (7.536105209, -0.427127707, 0.989878080)),
 ]
-# fmt: on
 
-# Vallado's reference output is given to ~9 significant figures; we allow
-# a small absolute tolerance to account for floating-point accumulation
-# differences between the reference C++ build and this environment's
-# double-precision arithmetic, not to mask a real discrepancy.
 POSITION_TOLERANCE_KM = 1e-5
 VELOCITY_TOLERANCE_KM_S = 1e-6
 

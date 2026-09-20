@@ -45,7 +45,7 @@ class EdgeRiskGNN(nn.Module):
     """Two GCN layers to get node embeddings, then an MLP over
     [embedding_a, embedding_b, raw edge features] to predict edge risk."""
 
-    def __init__(self, node_in_dim: int = 4, edge_in_dim: int = 5, hidden_dim: int = 16):
+    def __init__(self, node_in_dim: int = 4, edge_in_dim: int = 4, hidden_dim: int = 16):
         super().__init__()
         self.gcn1 = GCNLayer(node_in_dim, hidden_dim)
         self.gcn2 = GCNLayer(hidden_dim, hidden_dim)

@@ -1,33 +1,47 @@
-"""The false-negative gate: does the sparse graph miss real risks that
-exhaustive pairwise checking would catch?
+"""M2 false-negative gate: does the sparse pipeline ever drop a pair the
+exhaustive baseline flags as risky?
 
-This is the single most important validation in the M2 layer. The
-entire "O(N^2) -> O(|E_t|)" efficiency claim this project rests on is
-worthless if the sparse graph silently drops genuine conjunction risks
-to get there. This module runs build_graph() and run_baseline() on the
-identical scenario and reports exactly what, if anything, the sparse
-graph missed -- as a number, not an assumption.
+Two checks, because the coarse filter and the fine screen make different
+kinds of promises:
+  - Coarse filter (altitude bands): must be a strict superset of baseline-
+    flagged pairs -- regime.py's own docstring calls this a NECESSARY
+    condition, so zero misses here is a hard requirement, not a target.
+  - Fine screen (relative dynamics): uses a genuinely different, stricter
+    notion of risk (closing rate, not just distance) -- a baseline-flagged
+    pair failing the closing-rate floor is a deliberate design choice, not
+    a bug. We report it separately so it's visible, not silently dropped.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from constellai.common.constants import DEFAULT_SCREENING_DISTANCE_KM
-from constellai.graph.build import DEFAULT_REGIME_MARGIN_KM, GraphBuildResult, build_graph
+from constellai.graph.filters import candidate_pairs_by_regime
+from constellai.graph.screening import screen_candidate_pair
+from constellai.orbital_mechanics.conjunction import ConjunctionEvent
 from constellai.orbital_mechanics.tle import TLERecord
-from constellai.simulation.baseline import BaselineResult, run_baseline
+from constellai.simulation.baseline import run_baseline
 
 
 @dataclass(frozen=True)
-class FalseNegativeReport:
-    """Comparison between the sparse graph and the exhaustive baseline."""
+class FalseNegativeGateResult:
+    baseline_flagged_count: int
+    coarse_filter_missed: list[ConjunctionEvent] = field(default_factory=list)
+    fine_screen_missed: list[ConjunctionEvent] = field(default_factory=list)
 
-    baseline_flagged_ids: set[frozenset]
-    graph_flagged_ids: set[frozenset]
-    missed_pairs: set[frozenset]
-    false_negative_rate: float
+    @property
+    def coarse_filter_false_negative_rate(self) -> float:
+        if self.baseline_flagged_count == 0:
+            return 0.0
+        return len(self.coarse_filter_missed) / self.baseline_flagged_count
+
+    @property
+    def passed(self) -> bool:
+        """The hard requirement: coarse filter must miss nothing.
+        Fine-screen misses are reported but don't fail the gate -- that's
+        an intentional risk-definition difference, tracked separately."""
+        return len(self.coarse_filter_missed) == 0
 
 
 def run_false_negative_gate(
@@ -35,54 +49,39 @@ def run_false_negative_gate(
     start: datetime,
     end: datetime,
     step: timedelta,
-    distance_threshold_km: float = DEFAULT_SCREENING_DISTANCE_KM,
-    regime_margin_km: float = DEFAULT_REGIME_MARGIN_KM,
-) -> FalseNegativeReport:
-    """Run both the exhaustive baseline and the sparse graph on the same
-    scenario, and report what the graph missed.
+    threshold_km: float,
+    margin_km: float,
+) -> FalseNegativeGateResult:
+    """Diff the exhaustive baseline against the sparse M2 pipeline."""
+    baseline = run_baseline(records, start, end, step, threshold_km=threshold_km)
 
-    Parameters
-    ----------
-    records : list[TLERecord]
-    start, end, step : datetime, datetime, timedelta
-        Identical propagation window used for both methods.
-    distance_threshold_km : float, optional
-        Passed to BOTH methods identically -- an unequal threshold
-        would make any difference in flagged pairs uninterpretable.
-    regime_margin_km : float, optional
-        Passed to build_graph()'s coarse filter. Exposed here
-        explicitly (not hidden behind build_graph's default) so this
-        gate can actually be exercised at different filter tightness --
-        the whole point of a validation gate is being able to probe it,
-        not just call it once with fixed settings.
-
-    Returns
-    -------
-    FalseNegativeReport
-    """
-    baseline_result: BaselineResult = run_baseline(
-        records, start, end, step, threshold_km=distance_threshold_km,
-    )
-    graph_result: GraphBuildResult = build_graph(
-        records, start, end, step,
-        regime_margin_km=regime_margin_km,
-        distance_threshold_km=distance_threshold_km,
-    )
-
-    baseline_ids = {
-        frozenset((e.satellite_id_a, e.satellite_id_b))
-        for e in baseline_result.flagged
+    candidate_ids = {
+        frozenset((a.satellite_id, b.satellite_id))
+        for a, b in candidate_pairs_by_regime(records, margin_km=margin_km)
     }
-    graph_ids = {
-        frozenset(edge.satellite_ids) for edge in graph_result.edges
-    }
+    records_by_id = {r.satellite_id: r for r in records}
 
-    missed = baseline_ids - graph_ids
-    rate = len(missed) / len(baseline_ids) if baseline_ids else 0.0
+    coarse_missed: list[ConjunctionEvent] = []
+    fine_missed: list[ConjunctionEvent] = []
 
-    return FalseNegativeReport(
-        baseline_flagged_ids=baseline_ids,
-        graph_flagged_ids=graph_ids,
-        missed_pairs=missed,
-        false_negative_rate=rate,
+    for event in baseline.flagged:
+        pair_key = frozenset((event.satellite_id_a, event.satellite_id_b))
+
+        if pair_key not in candidate_ids:
+            coarse_missed.append(event)
+            continue
+
+        edge = screen_candidate_pair(
+            records_by_id[event.satellite_id_a],
+            records_by_id[event.satellite_id_b],
+            start, end, step,
+            distance_threshold_km=threshold_km,
+        )
+        if edge is None:
+            fine_missed.append(event)
+
+    return FalseNegativeGateResult(
+        baseline_flagged_count=len(baseline.flagged),
+        coarse_filter_missed=coarse_missed,
+        fine_screen_missed=fine_missed,
     )

@@ -13,7 +13,7 @@ class PairRiskLSTM(nn.Module):
     single risk probability. Deliberately simple: this is the floor
     the TGNN must clear, not a model worth tuning heavily."""
 
-    def __init__(self, input_dim: int = 5, hidden_dim: int = 32):
+    def __init__(self, input_dim: int = 4, hidden_dim: int = 32):
         super().__init__()
         self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
         self.head = nn.Linear(hidden_dim, 1)
