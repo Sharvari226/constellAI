@@ -29,7 +29,7 @@ class GraphEvent:
     t_index: int  # position in the chronological event stream
     node_a: int
     node_b: int
-    features: np.ndarray  # shape (4,): dx, dy, dz, separation_km
+    features: np.ndarray  # shape (5,): dx, dy, dz, separation_km, relative_speed_km_s
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,10 @@ def build_dynamic_graph(
         for t_idx, (sa, sb) in enumerate(zip(states_a, states_b)):
             rel = sa.position_km - sb.position_km
             sep = float(np.linalg.norm(rel))
-            events.append(GraphEvent(t_idx, idx_a, idx_b, np.array([*rel, sep], dtype=np.float32)))
+            rel_vel = sa.velocity_km_s - sb.velocity_km_s
+            rel_speed = float(np.linalg.norm(rel_vel))
+            features = np.array([*rel, sep, rel_speed], dtype=np.float32)
+            events.append(GraphEvent(t_idx, idx_a, idx_b, features))
 
         h_a, h_b = horizon_states[a.satellite_id], horizon_states[b.satellite_id]
         horizon_sep = np.linalg.norm(

@@ -93,7 +93,7 @@ def test_shared_policy_learns_across_multiple_agents_and_episodes():
     for _ in range(60):
         trajs = collect_rollout(
             env, policy,
-            initial_positions_m=[np.array([80.0, 0, 0]), np.array([90.0, 0, 0])],
+            initial_positions_m=[np.array([80.0, 0, 0]), np.array([5000.0, 0, 0])],
             initial_velocities_mps=[np.zeros(3), np.zeros(3)],
         )
         ppo_update(trajs, policy, optimizer)

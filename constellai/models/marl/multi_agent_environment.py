@@ -103,6 +103,23 @@ class MultiAgentAvoidanceEnv:
         self._step_count = 0
         return self._observations()
 
+    def get_threat_positions_and_velocities(self, agent_id: int) -> list[tuple[np.ndarray, np.ndarray]]:
+        """Every OTHER live agent's relative position/velocity as seen
+        from agent_id -- the actual input the multi-threat safety filter
+        needs to construct per-agent Threat objects. Does NOT include
+        the shared origin threat (callers add that separately, since it
+        has no 'other agent' state to speak of).
+        """
+        threats = []
+        my_pos, my_vel = self._states[agent_id].position, self._states[agent_id].velocity
+        for j in range(self.n_agents):
+            if j == agent_id or self._done[j]:
+                continue
+            rel_pos = self._states[j].position - my_pos
+            rel_vel = self._states[j].velocity - my_vel
+            threats.append((rel_pos, rel_vel))
+        return threats
+
     def step(self, actions: list[np.ndarray]) -> tuple[list[np.ndarray], MultiAgentStepResult]:
         """actions: list of (3,) thrust vectors, one per agent, in the
         SAME order as reset(). An agent already marked done from a
@@ -130,8 +147,21 @@ class MultiAgentAvoidanceEnv:
 
             self._states[i] = propagate_hcw_step(self._states[i], thrust, self.mean_motion, self.dt)
 
-            separation_m = float(np.linalg.norm(self._states[i].position))
-            collided = separation_m < self.collision_radius_m
+            separation_to_origin_m = float(np.linalg.norm(self._states[i].position))
+            collided_with_origin = separation_to_origin_m < self.collision_radius_m
+
+            collided_with_agent = False
+            nearest_agent_separation_m = float("inf")
+            for j in range(self.n_agents):
+                if j == i or self._done[j]:
+                    continue
+                sep_ij = float(np.linalg.norm(self._states[i].position - self._states[j].position))
+                nearest_agent_separation_m = min(nearest_agent_separation_m, sep_ij)
+                if sep_ij < self.collision_radius_m:
+                    collided_with_agent = True
+
+            collided = collided_with_origin or collided_with_agent
+            separation_m = min(separation_to_origin_m, nearest_agent_separation_m)
 
             target_distance_m = 1000.0
             mission_reward = -abs(separation_m - target_distance_m) / target_distance_m
@@ -143,6 +173,9 @@ class MultiAgentAvoidanceEnv:
             safety_costs.append(safety_cost)
             infos.append({
                 "separation_m": separation_m,
+                "separation_to_origin_m": separation_to_origin_m,
+                "collided_with_origin": collided_with_origin,
+                "collided_with_agent": collided_with_agent,
                 "fuel_remaining": self._fuel[i],
                 "collided": collided,
                 "step_count": self._step_count,

@@ -1,3 +1,4 @@
+
 * [33m20dad4d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m M2 complete (false-negative gate validated); M3 bug fixes (population mismatch, training-volume confound, memory-detachment fix, uncertainty head); M4 foundation (HCW dynamics, environment, rung-1 single-agent policy with confirmed learning) — 63/63 tests passing
 * [33mb980165[m M1 + M2 complete: orbital mechanics, sparse graph construction, false-negative validation gate (46/46 tests passing)
 *   [33m805834d[m[33m ([m[1;31morigin/main[m[33m)[m Merge pull request #3 from Sharvari226/models-anj

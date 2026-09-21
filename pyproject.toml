@@ -8,6 +8,7 @@ dependencies = [
     "numpy>=1.26",
     "torch>=2.0",
     "scipy>=1.11",
+    "matplotlib>=3.8",
 ]
 
 [project.optional-dependencies]
@@ -15,6 +16,7 @@ dev = ["pytest>=8.0", "pytest-cov"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["network: requires internet access"]
 
 [build-system]
 requires = ["setuptools>=68"]

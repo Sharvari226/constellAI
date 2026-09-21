@@ -12,6 +12,7 @@ from itertools import combinations
 
 import numpy as np
 
+from constellai.graph.filters import candidate_pairs_by_regime
 from constellai.orbital_mechanics.propagation import propagate_series
 from constellai.orbital_mechanics.tle import TLERecord
 
@@ -37,14 +38,22 @@ def build_forecast_examples(
     horizon_end: datetime,
     step: timedelta,
     threshold_km: float,
+    margin_km: float | None = None,
 ) -> list[PairExample]:
     """obs_start..obs_end -> features. obs_end..horizon_end -> label only,
-    never fed into features."""
+    never fed into features. When a coarse-filter margin is supplied, only
+    candidate pairs from that regime filter are used so the model sees the
+    same sparse population as the rest of the M2->M3 pipeline."""
     obs_states = {r.satellite_id: propagate_series(r, obs_start, obs_end, step) for r in records}
     horizon_states = {r.satellite_id: propagate_series(r, obs_end, horizon_end, step) for r in records}
 
+    if margin_km is not None:
+        candidate_pairs = candidate_pairs_by_regime(records, margin_km=margin_km)
+    else:
+        candidate_pairs = list(combinations(records, 2))
+
     examples: list[PairExample] = []
-    for a, b in combinations(records, 2):
+    for a, b in candidate_pairs:
         features = _relative_features(obs_states[a.satellite_id], obs_states[b.satellite_id])
 
         h_a, h_b = horizon_states[a.satellite_id], horizon_states[b.satellite_id]

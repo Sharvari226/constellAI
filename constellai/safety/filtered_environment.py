@@ -1,17 +1,18 @@
 """M5 integration: wraps M4's environments so every proposed action is
 passed through the HOCBF safety filter before physics executes it.
 
-Honest scope note: both environments currently model exactly ONE threat
-per agent (the shared target/threat at the LVLH origin) -- there is no
-agent-to-agent collision modeling yet. That means the single-threat
-closed-form filter (cbf_filter.py) is what actually applies here; the
-multi-threat QP solver (multi_threat_filter.py) has nothing to be
-genuinely exercised against until agent-to-agent collision is added to
-the environment itself, which is a separate, not-yet-done extension.
-Wrapping with the multi-threat solver here, before that extension
-exists, would be decorative wiring, not real integration -- so this
-module deliberately uses the single-threat filter, honestly matching
-the physics the environment actually models today.
+Uses multi_threat_safe_action (never cbf_filter.hocbf_safe_action) --
+the unbounded closed-form filter can propose a correction the
+environment's own max_thrust_mps2 clipping then silently truncates back
+down to something insufficient; the QP-based filter enforces the SAME
+thrust bound as part of its own optimization, so its output is never
+altered downstream.
+
+FilteredMultiAgentEnv now includes every OTHER live agent as an
+additional Threat, not just the shared origin -- this is the first
+genuine use of the multi-threat solver's simultaneous-constraint
+capability, now that MultiAgentAvoidanceEnv models real agent-to-agent
+collision.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from constellai.models.marl.multi_agent_environment import (
     MultiAgentAvoidanceEnv,
     MultiAgentStepResult,
 )
-from constellai.safety.cbf_filter import hocbf_safe_action
+from constellai.safety.multi_threat_filter import Threat, multi_threat_safe_action
 
 
 @dataclass
@@ -36,6 +37,7 @@ class FilterStats:
 
     total_actions: int = 0
     corrected_actions: int = 0
+    infeasible_actions: int = 0
 
     @property
     def correction_rate(self) -> float:
@@ -44,10 +46,9 @@ class FilterStats:
 
 class FilteredSingleAgentEnv:
     """Wraps SingleAgentAvoidanceEnv: every action passed to step() is
-    filtered through the single-threat HOCBF check before physics
-    executes it. The underlying environment is unmodified -- this is
-    composition, not a fork, so any fix to SingleAgentAvoidanceEnv
-    automatically applies here too."""
+    filtered through the (single-threat) HOCBF check before physics
+    executes it. Composition, not a fork -- fixes to
+    SingleAgentAvoidanceEnv apply here automatically."""
 
     def __init__(self, env: SingleAgentAvoidanceEnv):
         self.env = env
@@ -61,21 +62,25 @@ class FilteredSingleAgentEnv:
         return self.env.reset(initial_position_m, initial_velocity_mps)
 
     def step(self, proposed_action: np.ndarray) -> tuple[np.ndarray, StepResult]:
-        filter_result = hocbf_safe_action(
+        threat = Threat(
             relative_position_m=self._last_position,
             relative_velocity_mps=self._last_velocity,
+            safety_radius_m=self.env.collision_radius_m,
+        )
+        filter_result = multi_threat_safe_action(
+            threats=[threat],
             proposed_action_mps2=proposed_action,
             mean_motion=self.env.mean_motion,
-            safety_radius_m=self.env.collision_radius_m,
+            max_thrust_mps2=self.env.max_thrust_mps2,
         )
 
         self.stats.total_actions += 1
         if filter_result.was_corrected:
             self.stats.corrected_actions += 1
+        if not filter_result.solver_success:
+            self.stats.infeasible_actions += 1
 
         obs, result = self.env.step(filter_result.safe_action)
-        # Track state for the NEXT call's filter input -- obs is
-        # [pos(3), vel(3), fuel(1)], matching environment.py's contract.
         self._last_position = obs[:3]
         self._last_velocity = obs[3:6]
 
@@ -83,11 +88,10 @@ class FilteredSingleAgentEnv:
 
 
 class FilteredMultiAgentEnv:
-    """Same wrapping pattern as FilteredSingleAgentEnv, applied per
-    agent -- each agent independently filtered against its own single
-    threat (the shared origin), matching what MultiAgentAvoidanceEnv
-    actually models. See module docstring for why this is the honest
-    choice over the multi-threat solver at this stage."""
+    """Wraps MultiAgentAvoidanceEnv: every agent's action is filtered
+    against BOTH the shared origin threat AND every other live agent,
+    via the multi-threat QP solver -- the real, intended use case for
+    that solver, now that agent-to-agent collision is modeled."""
 
     def __init__(self, env: MultiAgentAvoidanceEnv):
         self.env = env
@@ -103,16 +107,26 @@ class FilteredMultiAgentEnv:
     def step(self, proposed_actions: list[np.ndarray]) -> tuple[list[np.ndarray], MultiAgentStepResult]:
         filtered_actions = []
         for i, action in enumerate(proposed_actions):
-            filter_result = hocbf_safe_action(
+            threats = [Threat(
                 relative_position_m=self._last_positions[i],
                 relative_velocity_mps=self._last_velocities[i],
-                proposed_action_mps2=action,
-                mean_motion=self.env.mean_motion,
                 safety_radius_m=self.env.collision_radius_m,
+            )]
+            for rel_pos, rel_vel in self.env.get_threat_positions_and_velocities(i):
+                threats.append(Threat(
+                    relative_position_m=rel_pos, relative_velocity_mps=rel_vel,
+                    safety_radius_m=self.env.collision_radius_m,
+                ))
+
+            filter_result = multi_threat_safe_action(
+                threats=threats, proposed_action_mps2=action,
+                mean_motion=self.env.mean_motion, max_thrust_mps2=self.env.max_thrust_mps2,
             )
             self.stats.total_actions += 1
             if filter_result.was_corrected:
                 self.stats.corrected_actions += 1
+            if not filter_result.solver_success:
+                self.stats.infeasible_actions += 1
             filtered_actions.append(filter_result.safe_action)
 
         obs_list, result = self.env.step(filtered_actions)

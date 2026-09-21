@@ -98,9 +98,24 @@ def multi_threat_safe_action(
         bounds=bounds, constraints=constraints,
     )
 
+    if result.success:
+        return MultiThreatFilterResult(
+            safe_action=result.x, was_corrected=True,
+            barrier_values=barrier_values, solver_success=True,
+        )
+
+    # Solver genuinely could not find a feasible point under the thrust
+    # bound -- NEVER fall back to the original (already known-unsafe)
+    # proposed action. Apply maximum available thrust directly along
+    # the most-violated constraint's gradient as an honest last resort;
+    # this may still not be enough (that's what solver_success=False
+    # communicates), but it is strictly better than doing nothing.
+    worst_idx = min(range(len(constraints)), key=lambda i: constraints[i]["fun"](proposed_action_mps2))
+    p = threats[worst_idx].relative_position_m
+    fallback_direction = p / (np.linalg.norm(p) + 1e-12)
+    fallback_action = fallback_direction * max_thrust_mps2
+
     return MultiThreatFilterResult(
-        safe_action=result.x if result.success else proposed_action_mps2,
-        was_corrected=result.success,
-        barrier_values=barrier_values,
-        solver_success=result.success,
+        safe_action=fallback_action, was_corrected=True,
+        barrier_values=barrier_values, solver_success=False,
     )

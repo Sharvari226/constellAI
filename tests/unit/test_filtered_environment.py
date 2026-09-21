@@ -32,7 +32,7 @@ def test_filtering_reduces_collisions_vs_unfiltered():
     nothing useful on its own still avoids collisions it otherwise
     wouldn't, because the safety layer corrects it."""
     def run_episode(use_filter: bool, n_steps: int = 30):
-        raw_env = SingleAgentAvoidanceEnv(mean_motion=0.0011, collision_radius_m=50.0, max_steps=n_steps)
+        raw_env = SingleAgentAvoidanceEnv(mean_motion=0.0011, collision_radius_m=50.0, max_steps=n_steps, max_thrust_mps2=1.0)
         env = FilteredSingleAgentEnv(raw_env) if use_filter else raw_env
 
         env.reset(initial_position_m=np.array([80.0, 0.0, 0.0]), initial_velocity_mps=np.array([-3.0, 0.0, 0.0]))
