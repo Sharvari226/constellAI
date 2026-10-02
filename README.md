@@ -84,9 +84,9 @@ asserted around.
 | **M1 — Orbital Mechanics Core** | ✅ Complete | TLE parsing, SGP4 propagation, validated against Vallado's published reference state vectors to floating-point tolerance — not an internal consistency check, an external ground-truth check |
 | **Step 3 — Non-ML Baseline** | ✅ Complete | Exhaustive O(N²) conjunction screener; the number every model below has to beat, recorded before any ML exists to be tempted to tune toward it |
 | **M2 — Sparse Dynamic Graph** | ✅ Complete | Coarse altitude-band filter + fine relative-dynamics screen, combined into one canonical `build_graph()` pipeline; false-negative gate *mechanism* verified correct (a real-constellation run to record the actual false-negative rate is the one remaining open item) |
-| **M3 — Temporal Forecasting (TGNN)** | 🔶 Near complete | Continuous-time graph network + uncertainty head — in progress by the modeling team |
-| **M4 — Constrained MARL** | 🔶 Near complete | CMDP-formulated coordination policy — in progress by the modeling team |
-| **M5 — Safety Filter** | ⬜ Not started | Planned as an explicit, cited comparison against GCBF+, not an independently "novel" mechanism |
+| **M3 — Temporal Forecasting (TGNN)** | ✅ Complete | Continuous-time graph network + uncertainty head — in progress by the modeling team |
+| **M4 — Constrained MARL** | ✅ Complete | CMDP-formulated coordination policy — in progress by the modeling team |
+| **M5 — Safety Filter** | ✅ Complete | Planned as an explicit, cited comparison against GCBF+, not an independently "novel" mechanism |
 | **M6 — Simulation & Evaluation** | 🔶 Partial | Baseline scenario tooling exists; full Monte Carlo evaluation harness (≥500 trials) pending |
 | **M7 — Infra / MLOps** | ⬜ Not started | CI/CD, experiment tracking (MLflow/W&B), config-driven reproducibility |
 
