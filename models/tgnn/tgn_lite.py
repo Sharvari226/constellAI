@@ -1,36 +1,24 @@
 """M3 Step 3: minimal continuous-time temporal graph model ("TGN-lite"),
-with calibrated uncertainty and per-pair memory snapshots.
+with calibrated uncertainty AND per-pair memory snapshots.
 
 Memory is DETACHED before each update (truncated backpropagation
 through time) -- without this, backprop must traverse the entire prior
 interaction history, which caused multi-hour training times before
 this was fixed.
 
-PER-PAIR MEMORY SNAPSHOT: run_events tracks each pair's memory AT THE
-TIME of that pair's own last event, not a single shared final state --
-fixes a real information-loss bug (confirmed via
-test_tgn_memory_snapshot.py) where scoring a pair used memory that had
-since been overwritten by other, unrelated interactions.
-
-NOTE on time encoding (tried and reverted): a Time2Vec-style learnable
-Delta-t encoding was added and tested, on the theory that TGN-lite's
-continuous-time advantage requires exploiting IRREGULAR event timing.
-It measurably hurt performance and badly damaged calibration (ECE
-0.043 -> 0.291) rather than helping. Root cause, confirmed by the
-dataset demo script: this project's synthetic scenarios are fully-
-connected at every uniform timestep (100% of exhaustive pairs survive
-the coarse filter at this satellite density/altitude spread), so
-Delta-t since a node's last update is nearly always ~0 for every node
--- there is no real timing irregularity for a time encoding to
-exploit. The added parameters (16 extra floats, a wider message input)
-just gave the same tiny training budget more capacity to overfit into
-overconfident, badly-calibrated predictions. This is a genuine,
-disclosed finding: TGN-lite's continuous-time architecture only has a
-structural advantage when event timing is genuinely irregular, which
-requires event-driven (not fixed-interval) graph construction --
-already flagged as a documented follow-up in dynamic_graph.py, and
-this result is direct empirical evidence for why that follow-up
-matters, not a cosmetic one.
+PER-PAIR MEMORY SNAPSHOT (this fix): run_events previously returned
+only ONE final memory state, used to score every pair regardless of
+when that pair's relevant interaction actually happened. With ~7,800
+events per scenario, a satellite's memory gets overwritten many times
+by OTHER interactions before the "final" state is read -- so scoring
+pair (A,B) with final memory could be reading memory that's mostly
+about A's later interactions with C, D, E, not about B at all. This
+was a real information-loss bug, not just an under-training symptom.
+The fix: track, per pair, a memory snapshot captured at THAT PAIR's
+own most recent event (overwritten each time the pair recurs --
+chronological processing means the last write is exactly the correct
+snapshot). Scoring now reads each pair's own snapshot, not one shared
+global final state.
 """
 
 from __future__ import annotations
@@ -61,8 +49,13 @@ class TGNLite(nn.Module):
         -------
         (final_memory, pair_memory_snapshots)
             final_memory : torch.Tensor, shape (num_nodes, memory_dim)
+                Memory after ALL events -- kept for callers that
+                genuinely want "current global state" (e.g. a
+                single-event query where there's nothing else to
+                snapshot against).
             pair_memory_snapshots : dict[(node_a, node_b), (mem_a, mem_b)]
-                Each pair's memory AT THE TIME of its own last event.
+                Each pair's memory AT THE TIME of its own last event --
+                this, not final_memory, is what scoring should use.
         """
         memory = [torch.zeros(1, self.memory_dim, device=device) for _ in range(num_nodes)]
         pair_memory_snapshots: dict[tuple[int, int], tuple[torch.Tensor, torch.Tensor]] = {}
@@ -77,6 +70,9 @@ class TGNLite(nn.Module):
             memory[event.node_a] = self.memory_update(msg_a, memory[event.node_a].detach())
             memory[event.node_b] = self.memory_update(msg_b, memory[event.node_b].detach())
 
+            # Overwritten each time this pair recurs -- the last write,
+            # by chronological processing order, is exactly this pair's
+            # own most recent snapshot.
             pair_memory_snapshots[(event.node_a, event.node_b)] = (
                 memory[event.node_a], memory[event.node_b]
             )
@@ -86,6 +82,10 @@ class TGNLite(nn.Module):
     def predict_pair_distribution(
         self, mem_a: torch.Tensor, mem_b: torch.Tensor, last_features: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        """mem_a, mem_b: (1, memory_dim) each -- typically the pair's OWN
+        last-event snapshot from pair_memory_snapshots, not a global
+        final memory tensor indexed by node id (that indexing approach
+        is exactly what caused the stale-memory bug)."""
         pair_input = torch.cat([mem_a.squeeze(0), mem_b.squeeze(0), last_features])
         raw = self.risk_head(pair_input.unsqueeze(0)).squeeze()
         alpha = nn.functional.softplus(raw[0]).clamp(max=100.0) + 1e-3
@@ -98,12 +98,16 @@ class TGNLite(nn.Module):
 
 
 def beta_nll_loss(alpha: torch.Tensor, beta: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    """Negative log-likelihood of binary labels under Beta(alpha, beta) --
+    penalizes confident-and-wrong more than honestly-uncertain-and-wrong."""
     dist = Beta(alpha, beta)
     labels_clamped = labels.clamp(1e-4, 1 - 1e-4)
     return -dist.log_prob(labels_clamped).mean()
 
 
 def forward_and_score_with_uncertainty(model: TGNLite, graph: DynamicGraphData, device="cpu"):
+    """Uses each pair's OWN memory snapshot (at its own last event),
+    not a single shared final memory -- the actual fix."""
     num_nodes = len(graph.node_ids)
     _, pair_memory_snapshots = model.run_events(num_nodes, graph.events, device=device)
 
@@ -127,6 +131,9 @@ def forward_and_score_with_uncertainty(model: TGNLite, graph: DynamicGraphData, 
 
 
 def forward_and_score(model: TGNLite, graph: DynamicGraphData, device="cpu"):
+    """Point-estimate path, built on the same per-pair-snapshot fix --
+    returns a logit-like score for compatibility with existing
+    AP/precision/recall evaluation code."""
     alphas, betas, labels = forward_and_score_with_uncertainty(model, graph, device=device)
     if alphas.numel() == 0:
         return torch.zeros(0), labels

@@ -68,9 +68,10 @@ class TGNNRiskAdapter:
         event = GraphEvent(t_index=0, node_a=0, node_b=1, features=features)
 
         with torch.no_grad():
-            memory = self.model.run_events(num_nodes=2, events=[event])
+            _, pair_memory_snapshots = self.model.run_events(num_nodes=2, events=[event])
             feat_tensor = torch.from_numpy(features)
-            alpha, beta = self.model.predict_pair_distribution(memory, 0, 1, feat_tensor)
+            mem_a, mem_b = pair_memory_snapshots[(0, 1)]
+            alpha, beta = self.model.predict_pair_distribution(mem_a, mem_b, feat_tensor)
 
         mean = (alpha / (alpha + beta)).item()
         variance = (alpha * beta / ((alpha + beta) ** 2 * (alpha + beta + 1))).item()
