@@ -109,7 +109,7 @@ def run_lstm(train_scenarios, test_scenarios, margin_km):
     test_ex = [ex for s in test_scenarios for ex in
                build_forecast_examples(s, OBS_START, OBS_END, HORIZON_END, STEP, THRESHOLD_KM, margin_km)]
     labels = [ex.label for ex in test_ex]
-    naive_preds = [int(ex.features[-1, -2] < THRESHOLD_KM) for ex in test_ex]
+    naive_preds = [int(ex.features[-1, -1] < THRESHOLD_KM) for ex in test_ex]
 
     aps, pooled_scores = [], []
     for seed in range(N_SEEDS):

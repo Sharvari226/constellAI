@@ -3,24 +3,32 @@ query "predicted collision risk" for their current relative state.
 
 Design choice, stated explicitly: this augments the RL OBSERVATION
 only -- it never touches safety_cost. safety_cost remains ground-truth
-collision, exactly as validated in every M4 test tonight (including
-the Lagrangian rung's lambda-adaptation tests). Feeding a forecast into
-the safety cost itself (CPO's own "cost shaping" idea) was considered
-and rejected here: it would mean rung 5's Lagrange multiplier trains
-against a mix of ground truth and a fallible forecast, undermining the
-exact property ("lambda provably tracks real constraint violation")
-already verified. Observation augmentation carries none of that risk --
-the policy can learn to use the forecast or ignore it, but the
-underlying CMDP's correctness is untouched.
+collision, exactly as validated in every M4 test. Feeding a forecast
+into the safety cost itself (CPO's own "cost shaping" idea) was
+considered and rejected here: it would mean the Lagrangian rung's
+multiplier trains against a mix of ground truth and a fallible
+forecast, undermining the already-verified "lambda provably tracks real
+constraint violation" property. Observation augmentation carries none
+of that risk -- the policy can learn to use the forecast or ignore it,
+the underlying CMDP's correctness is untouched.
 
-Honest limitation: M4's state/M3's GraphEvent.features share the same
-5 relative-dynamics quantities [dx,dy,dz,separation,rel_speed], which
-is what makes this bridge genuine rather than forced. But feeding ONE
-instantaneous state through TGNLite.run_events gives the model
-per-query cold-start memory (no accumulated history) -- real,
-useful risk information, but not the multi-day temporal context
-TGN-lite is designed to exploit. This is a disclosed simplification of
-the integration, not the model's full intended operating mode.
+UNIT FIX (previously a real bug): TGN-lite trains exclusively on
+km/km-s features (from propagation.py's propagate_series). Position was
+already converted m -> km here, but relative SPEED was passed through
+unconverted (still m/s) -- every risk query was feeding the model a
+velocity value ~1000x outside its training scale. Both are now
+converted consistently.
+
+Disclosed, NOT fixed by the above: M4's HCW frame operates at
+meter-to-kilometer scale (50m collision radius, 1000m mission target),
+while TGN-lite trained on whole-orbit separations at hundreds-to-
+thousands-of-km scale (THRESHOLD_KM=300 in the training scenarios).
+Even with correct units, M4's actual separations are far outside
+anything TGN-lite saw in training -- this bridge's predictions should
+be treated as unvalidated at M4's operating scale until TGN-lite is
+retrained on data at that scale, or inputs are deliberately rescaled
+into its training distribution. Do not present this bridge's output as
+reliable without that caveat.
 """
 
 from __future__ import annotations
@@ -30,6 +38,8 @@ import torch
 
 from constellai.models.tgnn.dynamic_graph import GraphEvent
 from constellai.models.tgnn.tgn_lite import TGNLite
+
+M_TO_KM = 1.0 / 1000.0
 
 
 class TGNNRiskAdapter:
@@ -55,14 +65,15 @@ class TGNNRiskAdapter:
         -------
         (mean_risk, std_risk) : tuple[float, float]
             mean_risk in [0, 1] (Beta distribution mean); std_risk is
-            the Beta distribution's standard deviation, the actual
-            calibrated uncertainty signal -- not a placeholder.
+            the Beta distribution's standard deviation.
         """
-        separation_m = float(np.linalg.norm(relative_position_m)) / 1000.0
-        rel_speed = float(np.linalg.norm(relative_velocity_mps))
+        position_km = relative_position_m * M_TO_KM
+        separation_km = float(np.linalg.norm(position_km))
+        rel_speed_km_s = float(np.linalg.norm(relative_velocity_mps)) * M_TO_KM
+
         features = np.concatenate([
-            relative_position_m / 1000.0,
-            [separation_m, rel_speed],
+            position_km,
+            [separation_km, rel_speed_km_s],
         ]).astype(np.float32)
 
         event = GraphEvent(t_index=0, node_a=0, node_b=1, features=features)

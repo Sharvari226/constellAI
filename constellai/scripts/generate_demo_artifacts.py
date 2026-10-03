@@ -115,12 +115,6 @@ def demo_feature_importance():
                 graph = build_dynamic_graph(scenario, OBS_START, OBS_END, HORIZON_END, STEP_TGN, MARGIN_KM, THRESHOLD_KM)
 
                 if shuffle_feature_idx is not None:
-                    # Rebuild each event's feature vector immutably --
-                    # do NOT mutate GraphEvent.features in place (it's a
-                    # frozen dataclass field pointing at a shared/cached
-                    # array in some code paths, and in-place mutation
-                    # here was the actual bug: it silently corrupted
-                    # feature width across repeated calls in this loop).
                     values = np.array([e.features[shuffle_feature_idx] for e in graph.events])
                     rng.shuffle(values)
                     from constellai.models.tgnn.dynamic_graph import GraphEvent
@@ -141,6 +135,32 @@ def demo_feature_importance():
                 labels.extend(lab)
         from constellai.models.tgnn.evaluation import average_precision
         return average_precision(scores, labels)
+
+    # Baseline AP (no shuffling), then AP with each feature individually
+    # shuffled -- averaged over 3 shuffle seeds per feature, since a
+    # single shuffle is a noisy point estimate.
+    baseline_ap = evaluate(shuffle_feature_idx=None)
+    print(f"Baseline AP (no shuffling): {baseline_ap:.4f}\n")
+
+    importances = []
+    for idx, feature_name in enumerate(FEATURE_NAMES):
+        shuffled_aps = [evaluate(shuffle_feature_idx=idx, seed=s) for s in range(3)]
+        avg_shuffled_ap = sum(shuffled_aps) / len(shuffled_aps)
+        importance = baseline_ap - avg_shuffled_ap
+        importances.append(importance)
+        print(f"  shuffle '{feature_name}': AP drops to {avg_shuffled_ap:.4f} "
+              f"(importance = {importance:+.4f})")
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    colors = ["indianred" if imp > 0 else "steelblue" for imp in importances]
+    ax.barh(FEATURE_NAMES, importances, color=colors)
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.set_xlabel("AP drop when feature is shuffled (higher = more important)")
+    ax.set_title("TGN-lite permutation feature importance")
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/02_feature_importance.png", dpi=150)
+    plt.close()
+    print(f"\nSaved: {OUTPUT_DIR}/02_feature_importance.png\n")
 
 
 # ---------------------------------------------------------------------------
@@ -168,19 +188,31 @@ def demo_model_performance():
         tgn_results["tgn"]["ap_mean"],
         tgn_unc_results["ap_mean"],
     ]
-    ap_errs = [
+
+    # Separate lower/upper error distances -- the naive baseline has no
+    # seed spread (ap_errs entries of 0 for both), the rest use their
+    # real [min, max] across seeds, each measured independently from
+    # the mean rather than assuming symmetry.
+    lower_errs = [
         0,
         lstm_results["lstm"]["ap_mean"] - lstm_results["lstm"]["ap_min"],
         gnn_results["gnn"]["ap_mean"] - gnn_results["gnn"]["ap_min"],
         tgn_results["tgn"]["ap_mean"] - tgn_results["tgn"]["ap_min"],
         tgn_unc_results["ap_mean"] - tgn_unc_results["ap_min"],
     ]
+    upper_errs = [
+        0,
+        lstm_results["lstm"]["ap_max"] - lstm_results["lstm"]["ap_mean"],
+        gnn_results["gnn"]["ap_max"] - gnn_results["gnn"]["ap_mean"],
+        tgn_results["tgn"]["ap_max"] - tgn_results["tgn"]["ap_mean"],
+        tgn_unc_results["ap_max"] - tgn_unc_results["ap_mean"],
+    ]
 
     fig, ax = plt.subplots(figsize=(9, 5))
-    bars = ax.bar(names, aps, yerr=ap_errs, capsize=5,
+    bars = ax.bar(names, aps, yerr=[lower_errs, upper_errs], capsize=5,
                    color=["gray", "steelblue", "seagreen", "goldenrod", "indianred"])
     ax.set_ylabel("Average Precision (AP)")
-    ax.set_title("Conjunction forecasting: model comparison (mean ± min/max across seeds)")
+    ax.set_title("Conjunction forecasting: model comparison (mean, min-max across seeds)")
     for bar, ap in zip(bars, aps):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01, f"{ap:.3f}", ha="center")
     plt.tight_layout()
