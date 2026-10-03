@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 900 360">
+<rect width="100%" height="100%" fill="white"/>
+<title>M2 false-negative gate · existing validation procedure</title>
+<desc></desc>
+<style>text{font-family:Arial,Helvetica,sans-serif;fill:#263746}.title{font-size:24px;font-weight:700}.subtitle{font-size:13px}.label{font-size:13px}.small{font-size:11px}.node-label{font-size:10px}</style>
+<text x="450.0" y="42.0" text-anchor="middle" class="title">M2 false-negative gate · existing validation procedure</text>
+<text x="450.0" y="110.0" text-anchor="middle" class="label">Exhaustive baseline flagged 2 relevant pairs</text>
+<rect x="90.0" y="155" width="720.0" height="62" fill="#39805b"/>
+<text x="450.0" y="194.0" text-anchor="middle" class="label" fill="white">2</text>
+<rect x="140" y="260" width="14" height="14" fill="#b23a48"/>
+<text x="162.0" y="272.0" text-anchor="start" class="small">False negatives</text>
+<rect x="400" y="260" width="14" height="14" fill="#39805b"/>
+<text x="422.0" y="272.0" text-anchor="start" class="small">Retained baseline pairs</text>
+<text x="450.0" y="315.0" text-anchor="middle" class="small">Existing gate false-negative rate: 0.000 · single scenario, seed 0</text>
+</svg>
