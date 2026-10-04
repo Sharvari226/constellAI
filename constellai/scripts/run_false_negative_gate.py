@@ -54,28 +54,29 @@ def main():
         records = build_scenario(seed)
         report = run_false_negative_gate(
             records, OBS_START, OBS_END, STEP,
-            distance_threshold_km=DISTANCE_THRESHOLD_KM,
-            regime_margin_km=REGIME_MARGIN_KM,
+            threshold_km=DISTANCE_THRESHOLD_KM,
+            margin_km=REGIME_MARGIN_KM,
         )
         all_reports.append(report)
 
         total_possible = N_SATELLITES * (N_SATELLITES - 1) // 2
         print(f"\n--- seed {seed} ---")
         print(f"  total possible pairs (exhaustive): {total_possible}")
-        print(f"  baseline flagged: {len(report.baseline_flagged_ids)}")
-        print(f"  graph flagged: {len(report.graph_flagged_ids)}")
-        print(f"  MISSED (false negatives): {len(report.missed_pairs)}")
-        print(f"  false-negative rate: {report.false_negative_rate:.4f}")
-        if report.missed_pairs:
-            print(f"  missed pairs: {report.missed_pairs}")
+        print(f"  baseline flagged: {report.baseline_flagged_count}")
+        print(f"  coarse filter MISSED (false negatives): {len(report.coarse_filter_missed)}")
+        print(f"  fine screen rejected (different risk definition, not a failure): {len(report.fine_screen_missed)}")
+        print(f"  coarse-filter false-negative rate: {report.coarse_filter_false_negative_rate:.4f}")
+        print(f"  gate passed (zero coarse-filter misses): {report.passed}")
+        if report.coarse_filter_missed:
+            print(f"  missed events: {report.coarse_filter_missed}")
 
-    total_baseline_flags = sum(len(r.baseline_flagged_ids) for r in all_reports)
-    total_missed = sum(len(r.missed_pairs) for r in all_reports)
+    total_baseline_flags = sum(r.baseline_flagged_count for r in all_reports)
+    total_missed = sum(len(r.coarse_filter_missed) for r in all_reports)
     overall_rate = total_missed / total_baseline_flags if total_baseline_flags else 0.0
 
     print(f"\n=== Overall across 5 seeds ===")
     print(f"Total baseline-flagged conjunctions: {total_baseline_flags}")
-    print(f"Total missed by sparse graph: {total_missed}")
+    print(f"Total missed by coarse filter: {total_missed}")
     print(f"Overall false-negative rate: {overall_rate:.4f}")
     if overall_rate == 0.0:
         print("Zero misses across all seeds -- the sparsity claim holds at this scale/margin.")

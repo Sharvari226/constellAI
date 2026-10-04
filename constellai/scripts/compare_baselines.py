@@ -24,7 +24,7 @@ import random
 from datetime import datetime, timedelta
 
 import torch
-
+torch.set_num_threads(1)
 from constellai.models.tgnn.dataset import build_forecast_examples
 from constellai.models.tgnn.dynamic_graph import build_dynamic_graph
 from constellai.models.tgnn.evaluation import (
@@ -57,8 +57,9 @@ N_TEST_SCENARIOS = 6
 
 N_SEEDS = 3
 N_TGN_TEST_SCENARIOS = 3
-TGN_EPOCHS = 8
-LSTM_EPOCHS = 15
+TGN_EPOCHS = 50
+TGN_UNCERTAINTY_EPOCHS = 20
+LSTM_EPOCHS = 50
 GNN_EPOCHS = 50
 
 
@@ -264,7 +265,7 @@ def run_tgn_one_seed_uncertainty(seed, train_scenarios, test_scenarios):
     ]
     model = TGNLite()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    for epoch in range(TGN_EPOCHS):
+    for epoch in range(TGN_UNCERTAINTY_EPOCHS):
         loss = train_tgn_one_epoch_uncertainty(model, train_graphs, optimizer)
         print(f"    [seed {seed}, uncertainty] epoch {epoch+1}/{TGN_EPOCHS}, loss={loss:.4f}", flush=True)
 
