@@ -1,7 +1,7 @@
 """Train + evaluate the static-GNN baseline, same scenario design as the
 LSTM baseline so results are directly comparable.
 
-Run: python scripts/train_gnn_baseline.py
+Run: python -m constellai.scripts.train_gnn_baseline
 """
 
 import math
@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 
 import torch
 
-from constellai.models.graph_dataset import build_graph_snapshot
-from constellai.models.gnn_baseline import EdgeRiskGNN, train_one_epoch
+from constellai.models.tgnn.graph_dataset import build_graph_snapshot
+from constellai.models.tgnn.gnn_baseline import EdgeRiskGNN, train_one_epoch
 from constellai.orbital_mechanics.synthetic import make_circular_satellite
 
 STEP = timedelta(minutes=2)

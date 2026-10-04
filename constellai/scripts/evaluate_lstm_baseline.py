@@ -9,7 +9,7 @@ earlier versions of this script meaningless (both models hit 1.0/1.0).
 Note: real orbital geometry makes conjunctions RARE -- expect a small,
 imbalanced positive count. That's physically honest, not a scenario bug.
 
-Run: python scripts/evaluate_lstm_baseline.py
+Run: python -m constellai.scripts.evaluate_lstm_baseline
 """
 
 import math
@@ -18,8 +18,8 @@ from datetime import datetime, timedelta
 
 import torch
 
-from constellai.models.dataset import build_forecast_examples
-from constellai.models.lstm_baseline import PairRiskLSTM, train_one_epoch
+from constellai.models.tgnn.dataset import build_forecast_examples
+from constellai.models.tgnn.lstm_baseline import PairRiskLSTM
 from constellai.orbital_mechanics.synthetic import make_circular_satellite
 
 STEP = timedelta(minutes=2)
@@ -73,8 +73,6 @@ def main():
     print(f"test:  {len(test_examples)} examples, {sum(e.label for e in test_examples)} positive")
 
     model = PairRiskLSTM()
-    # Imbalanced positives -> weight the loss so rare conjunctions aren't
-    # just ignored by the model.
     n_pos = max(sum(e.label for e in train_examples), 1)
     n_neg = len(train_examples) - n_pos
     pos_weight = torch.tensor([n_neg / n_pos])

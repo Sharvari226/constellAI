@@ -5,7 +5,7 @@
 **Anticipatory, physics-informed orbital intelligence for space traffic management**
 
 [![Status](https://img.shields.io/badge/status-active%20development-yellow)]()
-[![Tests](https://img.shields.io/badge/tests-46%2F46%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-125%2F125%20passing-brightgreen)]()
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![License](https://img.shields.io/badge/license-TBD-lightgrey)]()
 
