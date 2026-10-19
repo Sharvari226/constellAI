@@ -1,0 +1,102 @@
+{
+  "zero_thrust": {
+    "n_trials": 200,
+    "collision_free": 106,
+    "collision_free_rate": 0.53,
+    "ci95_low": 0.46091557335361155,
+    "ci95_high": 0.5979536662912893,
+    "mean_min_separation_m": 72.59631434629807,
+    "mean_fuel_used_per_agent": 0.0,
+    "mean_saturation_fraction": 0.0
+  },
+  "constant_burn": {
+    "n_trials": 200,
+    "collision_free": 159,
+    "collision_free_rate": 0.795,
+    "ci95_low": 0.7337418048192546,
+    "ci95_high": 0.8451390516889363,
+    "mean_min_separation_m": 98.751245629761,
+    "mean_fuel_used_per_agent": 33.251911403707126,
+    "mean_saturation_fraction": 1.0
+  },
+  "constrained_mappo s0 untrained": {
+    "n_trials": 200,
+    "collision_free": 185,
+    "collision_free_rate": 0.925,
+    "ci95_low": 0.8799554020266798,
+    "ci95_high": 0.9540254929427476,
+    "mean_min_separation_m": 161.67703777376448,
+    "mean_fuel_used_per_agent": 4.778369122879213,
+    "mean_saturation_fraction": 0.0
+  },
+  "constrained_mappo s0 TRAINED": {
+    "n_trials": 200,
+    "collision_free": 194,
+    "collision_free_rate": 0.97,
+    "ci95_low": 0.9361048802675267,
+    "ci95_high": 0.9861798741692518,
+    "mean_min_separation_m": 269.31637686047475,
+    "mean_fuel_used_per_agent": 16.154442667076186,
+    "mean_saturation_fraction": 0.18163615669621846
+  },
+  "ippo s0 untrained": {
+    "n_trials": 200,
+    "collision_free": 185,
+    "collision_free_rate": 0.925,
+    "ci95_low": 0.8799554020266798,
+    "ci95_high": 0.9540254929427476,
+    "mean_min_separation_m": 161.67703777376448,
+    "mean_fuel_used_per_agent": 4.778369122879213,
+    "mean_saturation_fraction": 0.0
+  },
+  "ippo s0 TRAINED": {
+    "n_trials": 200,
+    "collision_free": 176,
+    "collision_free_rate": 0.88,
+    "ci95_low": 0.8276563857409517,
+    "ci95_high": 0.9180206497611246,
+    "mean_min_separation_m": 131.34326107160763,
+    "mean_fuel_used_per_agent": 11.171580248728164,
+    "mean_saturation_fraction": 0.06702215366688437
+  },
+  "mappo s0 untrained": {
+    "n_trials": 200,
+    "collision_free": 185,
+    "collision_free_rate": 0.925,
+    "ci95_low": 0.8799554020266798,
+    "ci95_high": 0.9540254929427476,
+    "mean_min_separation_m": 161.67703777376448,
+    "mean_fuel_used_per_agent": 4.778369122879213,
+    "mean_saturation_fraction": 0.0
+  },
+  "mappo s0 TRAINED": {
+    "n_trials": 200,
+    "collision_free": 198,
+    "collision_free_rate": 0.99,
+    "ci95_low": 0.9642775148038205,
+    "ci95_high": 0.9972533993962251,
+    "mean_min_separation_m": 347.5028763225662,
+    "mean_fuel_used_per_agent": 29.267824594077055,
+    "mean_saturation_fraction": 0.8670914887196137
+  },
+  "reinforce s0 untrained": {
+    "n_trials": 200,
+    "collision_free": 185,
+    "collision_free_rate": 0.925,
+    "ci95_low": 0.8799554020266798,
+    "ci95_high": 0.9540254929427476,
+    "mean_min_separation_m": 161.67703777376448,
+    "mean_fuel_used_per_agent": 4.778369122879213,
+    "mean_saturation_fraction": 0.0
+  },
+  "reinforce s0 TRAINED": {
+    "n_trials": 200,
+    "collision_free": 178,
+    "collision_free_rate": 0.89,
+    "ci95_low": 0.8390720169908702,
+    "ci95_high": 0.9262280983928396,
+    "mean_min_separation_m": 183.66076551508712,
+    "mean_fuel_used_per_agent": 30.353669741176347,
+    "mean_saturation_fraction": 0.9932195155125955
+  }
+}

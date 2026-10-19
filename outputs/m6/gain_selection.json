@@ -1,0 +1,420 @@
+{
+ "meta": {
+  "git_commit": "10d2a80",
+  "stream": 3,
+  "grid": [
+   0.001,
+   0.003,
+   0.01,
+   0.02,
+   0.03,
+   0.05,
+   0.1,
+   0.3,
+   1.0
+  ],
+  "trials": 100,
+  "seed": 0,
+  "tiers": [
+   "nominal",
+   "short_notice"
+  ],
+  "policies": [
+   "zero_thrust",
+   "constant_burn",
+   "constrained_mappo_s0_trained",
+   "ippo_s0_trained",
+   "mappo_s0_untrained",
+   "mappo_s0_trained",
+   "reinforce_s0_trained"
+  ],
+  "harm_tolerance_trials": 2
+ },
+ "selection": {
+  "chosen": null,
+  "best_alpha": 0.05,
+  "threshold": 0.8300288910989939,
+  "candidates": [
+   0.05
+  ],
+  "rejected_for_harm": [
+   0.05
+  ]
+ },
+ "rows": [
+  {
+   "alpha": 0.001,
+   "mean_free_rate": 0.7728571428571429,
+   "se": 0.010729037463722418,
+   "mean_correction_rate": 0.26768249334967015,
+   "mean_extra_fuel": -1.5898731551258194,
+   "helped": 96,
+   "hurt": 161,
+   "harmed_cells": [
+    [
+     "nominal",
+     "constrained_mappo_s0_trained",
+     99,
+     90
+    ],
+    [
+     "nominal",
+     "ippo_s0_trained",
+     92,
+     85
+    ],
+    [
+     "nominal",
+     "mappo_s0_trained",
+     99,
+     93
+    ],
+    [
+     "nominal",
+     "reinforce_s0_trained",
+     93,
+     80
+    ],
+    [
+     "short_notice",
+     "constant_burn",
+     73,
+     60
+    ],
+    [
+     "short_notice",
+     "constrained_mappo_s0_trained",
+     95,
+     78
+    ],
+    [
+     "short_notice",
+     "mappo_s0_untrained",
+     78,
+     74
+    ],
+    [
+     "short_notice",
+     "mappo_s0_trained",
+     96,
+     86
+    ],
+    [
+     "short_notice",
+     "reinforce_s0_trained",
+     81,
+     73
+    ]
+   ]
+  },
+  {
+   "alpha": 0.003,
+   "mean_free_rate": 0.7728571428571429,
+   "se": 0.010824669481686502,
+   "mean_correction_rate": 0.16545648558120013,
+   "mean_extra_fuel": -1.1122141785739266,
+   "helped": 168,
+   "hurt": 233,
+   "harmed_cells": [
+    [
+     "nominal",
+     "constrained_mappo_s0_trained",
+     99,
+     88
+    ],
+    [
+     "nominal",
+     "ippo_s0_trained",
+     92,
+     79
+    ],
+    [
+     "nominal",
+     "mappo_s0_untrained",
+     94,
+     88
+    ],
+    [
+     "nominal",
+     "mappo_s0_trained",
+     99,
+     96
+    ],
+    [
+     "nominal",
+     "reinforce_s0_trained",
+     93,
+     89
+    ],
+    [
+     "short_notice",
+     "constant_burn",
+     73,
+     66
+    ],
+    [
+     "short_notice",
+     "constrained_mappo_s0_trained",
+     95,
+     66
+    ],
+    [
+     "short_notice",
+     "ippo_s0_trained",
+     72,
+     64
+    ],
+    [
+     "short_notice",
+     "mappo_s0_untrained",
+     78,
+     70
+    ],
+    [
+     "short_notice",
+     "mappo_s0_trained",
+     96,
+     75
+    ],
+    [
+     "short_notice",
+     "reinforce_s0_trained",
+     81,
+     69
+    ]
+   ]
+  },
+  {
+   "alpha": 0.01,
+   "mean_free_rate": 0.6785714285714286,
+   "se": 0.011837332849066629,
+   "mean_correction_rate": 0.06802285036308665,
+   "mean_extra_fuel": -1.0158610682334572,
+   "helped": 118,
+   "hurt": 315,
+   "harmed_cells": [
+    [
+     "nominal",
+     "constant_burn",
+     76,
+     56
+    ],
+    [
+     "nominal",
+     "constrained_mappo_s0_trained",
+     99,
+     95
+    ],
+    [
+     "nominal",
+     "ippo_s0_trained",
+     92,
+     75
+    ],
+    [
+     "nominal",
+     "mappo_s0_untrained",
+     94,
+     86
+    ],
+    [
+     "nominal",
+     "reinforce_s0_trained",
+     93,
+     72
+    ],
+    [
+     "short_notice",
+     "constant_burn",
+     73,
+     59
+    ],
+    [
+     "short_notice",
+     "constrained_mappo_s0_trained",
+     95,
+     49
+    ],
+    [
+     "short_notice",
+     "ippo_s0_trained",
+     72,
+     59
+    ],
+    [
+     "short_notice",
+     "mappo_s0_untrained",
+     78,
+     57
+    ],
+    [
+     "short_notice",
+     "mappo_s0_trained",
+     96,
+     63
+    ],
+    [
+     "short_notice",
+     "reinforce_s0_trained",
+     81,
+     62
+    ]
+   ]
+  },
+  {
+   "alpha": 0.02,
+   "mean_free_rate": 0.7878571428571428,
+   "se": 0.010141096426653968,
+   "mean_correction_rate": 0.020124490816009196,
+   "mean_extra_fuel": -0.3052407561610376,
+   "helped": 92,
+   "hurt": 136,
+   "harmed_cells": [
+    [
+     "nominal",
+     "constant_burn",
+     76,
+     62
+    ],
+    [
+     "nominal",
+     "ippo_s0_trained",
+     92,
+     85
+    ],
+    [
+     "nominal",
+     "mappo_s0_untrained",
+     94,
+     91
+    ],
+    [
+     "short_notice",
+     "constant_burn",
+     73,
+     56
+    ],
+    [
+     "short_notice",
+     "constrained_mappo_s0_trained",
+     95,
+     85
+    ],
+    [
+     "short_notice",
+     "ippo_s0_trained",
+     72,
+     61
+    ],
+    [
+     "short_notice",
+     "mappo_s0_untrained",
+     78,
+     69
+    ],
+    [
+     "short_notice",
+     "reinforce_s0_trained",
+     81,
+     76
+    ]
+   ]
+  },
+  {
+   "alpha": 0.03,
+   "mean_free_rate": 0.8250000000000001,
+   "se": 0.009543937064643581,
+   "mean_correction_rate": 0.008870342037530125,
+   "mean_extra_fuel": -0.15811598412022126,
+   "helped": 96,
+   "hurt": 88,
+   "harmed_cells": [
+    [
+     "nominal",
+     "constant_burn",
+     76,
+     67
+    ],
+    [
+     "short_notice",
+     "constant_burn",
+     73,
+     63
+    ],
+    [
+     "short_notice",
+     "constrained_mappo_s0_trained",
+     95,
+     92
+    ],
+    [
+     "short_notice",
+     "ippo_s0_trained",
+     72,
+     64
+    ],
+    [
+     "short_notice",
+     "reinforce_s0_trained",
+     81,
+     76
+    ]
+   ]
+  },
+  {
+   "alpha": 0.05,
+   "mean_free_rate": 0.8392857142857143,
+   "se": 0.009256823186720381,
+   "mean_correction_rate": 0.003495331544920954,
+   "mean_extra_fuel": -0.0460497994683963,
+   "helped": 60,
+   "hurt": 32,
+   "harmed_cells": [
+    [
+     "nominal",
+     "constant_burn",
+     76,
+     73
+    ],
+    [
+     "short_notice",
+     "constant_burn",
+     73,
+     70
+    ]
+   ]
+  },
+  {
+   "alpha": 0.1,
+   "mean_free_rate": 0.8250000000000001,
+   "se": 0.009247448627726947,
+   "mean_correction_rate": 0.0011304363029371923,
+   "mean_extra_fuel": 0.023720407578381914,
+   "helped": 15,
+   "hurt": 7,
+   "harmed_cells": []
+  },
+  {
+   "alpha": 0.3,
+   "mean_free_rate": 0.8200000000000001,
+   "se": 0.009318623004171677,
+   "mean_correction_rate": 0.00030438583224156836,
+   "mean_extra_fuel": 0.005826584408535311,
+   "helped": 1,
+   "hurt": 0,
+   "harmed_cells": []
+  },
+  {
+   "alpha": 1.0,
+   "mean_free_rate": 0.8200000000000001,
+   "se": 0.009318623004171677,
+   "mean_correction_rate": 9.483864088185159e-05,
+   "mean_extra_fuel": 0.005171959315971882,
+   "helped": 1,
+   "hurt": 0,
+   "harmed_cells": []
+  }
+ ],
+ "transfer_rows": [],
+ "baseline_free_rate_hcw": 0.8192857142857143
+}
