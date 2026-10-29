@@ -61,3 +61,11 @@ class PIDLagrange:
         self.lam = float(np.clip(self.kp * max(err, 0) + self.I + self.kd * D,
                                  0.0, self.lam_max))
         return self.lam
+
+def config_for_env(env) -> ObjectiveConfig:
+    """Meters / m/s / seconds version of the config for the HCW envs."""
+    return ObjectiveConfig(
+        d_safe=r, d_warn=5.0 * r, horizon=10.0 * env.dt,
+        dv_max=env.max_thrust_mps2 * env.dt,
+        deadband=50.0, track_scale=1000.0, w_track=1.0,
+        w_fuel=0.0)   # fuel is penalised by ScaledMultiAgentEnv(fuel_weight)
