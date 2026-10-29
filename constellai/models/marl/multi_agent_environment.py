@@ -34,7 +34,8 @@ from constellai.models.marl.environment import (
     DEFAULT_MAX_THRUST_MPS2,
 )
 from constellai.orbital_mechanics.relative_motion import RelativeState, propagate_hcw_step
-
+from constellai.models.marl.objective import (
+    reward as objective_reward, costs as objective_costs, config_for_env)
 
 @dataclass
 class MultiAgentStepResult:
@@ -101,6 +102,8 @@ class MultiAgentAvoidanceEnv:
         self._fuel = [self.fuel_budget] * self.n_agents
         self._done = [False] * self.n_agents
         self._step_count = 0
+        self._obj_cfg = config_for_env(self)
+        self._prev_dv = [np.zeros(3) for _ in range(self.n_agents)]
         return self._observations()
 
     def get_threat_positions_and_velocities(self, agent_id: int) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -136,7 +139,7 @@ class MultiAgentAvoidanceEnv:
             if self._done[i]:
                 mission_rewards.append(0.0)
                 safety_costs.append(0.0)
-                infos.append({"already_done": True})
+                infos.append({"already_done": True, "cost_sec": 0.0})
                 continue
 
             thrust = np.clip(actions[i], -self.max_thrust_mps2, self.max_thrust_mps2)
@@ -163,9 +166,15 @@ class MultiAgentAvoidanceEnv:
             collided = collided_with_origin or collided_with_agent
             separation_m = min(separation_to_origin_m, nearest_agent_separation_m)
 
-            target_distance_m = 1000.0
-            mission_reward = -abs(separation_m - target_distance_m) / target_distance_m
-            safety_cost = 1.0 if collided else 0.0
+            dv = thrust * self.dt  # thrust is already zeroed if out of fuel
+            others = self.get_threat_positions_and_velocities(i)
+            origin = (-self._states[i].position, -self._states[i].velocity)
+            slot_err = np.array([abs(separation_to_origin_m - 1000.0)])
+
+            mission_reward = objective_reward(dv, self._prev_dv[i], slot_err, self._obj_cfg)
+            c = objective_costs(dv, thrust, thrust, [origin] + others, others, self._obj_cfg)
+            self._prev_dv[i] = dv
+            safety_cost = c["conj"]
 
             self._done[i] = collided or self._fuel[i] <= 0.0 or self._step_count >= self.max_steps
 
@@ -179,6 +188,7 @@ class MultiAgentAvoidanceEnv:
                 "fuel_remaining": self._fuel[i],
                 "collided": collided,
                 "step_count": self._step_count,
+                "cost_sec": c["sec"],
             })
 
         return self._observations(), MultiAgentStepResult(mission_rewards, safety_costs, list(self._done), infos)
