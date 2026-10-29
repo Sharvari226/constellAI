@@ -64,6 +64,7 @@ class PIDLagrange:
 
 def config_for_env(env) -> ObjectiveConfig:
     """Meters / m/s / seconds version of the config for the HCW envs."""
+    r = env.collision_radius_m
     return ObjectiveConfig(
         d_safe=r, d_warn=5.0 * r, horizon=10.0 * env.dt,
         dv_max=env.max_thrust_mps2 * env.dt,

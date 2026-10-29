@@ -37,3 +37,4 @@ def test_lambda_rises_then_falls():
 def test_no_derivative_kick_on_first_update():
     p = PIDLagrange(budget=0.1)
     assert abs(p.update(1.0) - (0.5*0.9 + 0.05*0.9)) < 1e-12
+

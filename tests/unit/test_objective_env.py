@@ -43,3 +43,11 @@ def test_secondary_cost_requires_burn():
     assert idle.infos[0]["cost_sec"] == 0.0
     burn = run(make(), pos, [np.array([0.5 * env.max_thrust_mps2, 0, 0]), Z])
     assert burn.infos[0]["cost_sec"] > 0.0
+
+def test_fuel_not_double_counted():
+    # the fuel penalty lives in ScaledMultiAgentEnv; the raw env must not add its own
+    env = make()
+    env.reset([np.array([1000.0, 0, 0]), np.array([0, 1000.0, 0])], [Z.copy(), Z.copy()])
+    assert env._obj_cfg.w_fuel == 0.0
+    res = env.step([np.array([env.max_thrust_mps2, 0, 0]), Z])[1]
+    assert res.infos[0]["fuel_remaining"] < env.fuel_budget   # burn happened
