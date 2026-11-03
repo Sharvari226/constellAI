@@ -51,3 +51,21 @@ def test_fuel_not_double_counted():
     assert env._obj_cfg.w_fuel == 0.0
     res = env.step([np.array([env.max_thrust_mps2, 0, 0]), Z])[1]
     assert res.infos[0]["fuel_remaining"] < env.fuel_budget   # burn happened
+
+def test_pair_collision_is_symmetric():
+    env = make()
+    R = env.collision_radius_m
+    a = np.array([1000.0, 0, 0])
+    res = run(env, [a, a + np.array([0.5 * R, 0, 0])], [Z, Z])
+    assert all(i["collided_with_agent"] for i in res.infos)
+    assert all(res.dones)
+    assert res.safety_costs[0] == res.safety_costs[1] == 1.0
+
+def test_pair_cost_is_symmetric_under_burn():
+    # agent 1 burns toward agent 0; both must score the same post-move geometry
+    env = make()
+    R = env.collision_radius_m
+    a = np.array([1000.0, 0, 0])
+    b = a + np.array([3.0 * R, 0, 0])
+    res = run(env, [a, b], [Z, np.array([-env.max_thrust_mps2, 0, 0])])
+    assert abs(res.safety_costs[0] - res.safety_costs[1]) < 1e-9

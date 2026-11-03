@@ -124,39 +124,46 @@ class MultiAgentAvoidanceEnv:
         return threats
 
     def step(self, actions: list[np.ndarray]) -> tuple[list[np.ndarray], MultiAgentStepResult]:
-        """actions: list of (3,) thrust vectors, one per agent, in the
-        SAME order as reset(). An agent already marked done from a
-        previous step is not re-stepped -- its thrust is ignored and it
-        keeps reporting done=True, mirroring standard multi-agent env
-        convention (agents can finish at different times)."""
         if len(actions) != self.n_agents:
             raise ValueError(f"expected {self.n_agents} actions, got {len(actions)}")
 
-        mission_rewards, safety_costs, infos = [], [], []
         self._step_count += 1
+        live = [not d for d in self._done]   # alive at the START of this step
 
+        # Phase 1: advance every live agent. No collision or cost logic here,
+        # so nothing below depends on the order agents are listed in.
+        thrusts = [np.zeros(3) for _ in range(self.n_agents)]
         for i in range(self.n_agents):
-            if self._done[i]:
-                mission_rewards.append(0.0)
-                safety_costs.append(0.0)
-                infos.append({"already_done": True, "cost_sec": 0.0})
+            if not live[i]:
                 continue
-
             thrust = np.clip(actions[i], -self.max_thrust_mps2, self.max_thrust_mps2)
             fuel_cost = float(np.linalg.norm(thrust)) * self.dt
             self._fuel[i] = max(0.0, self._fuel[i] - fuel_cost)
             if self._fuel[i] <= 0.0 and fuel_cost > 0:
                 thrust = np.zeros(3)
-
             self._states[i] = propagate_hcw_step(self._states[i], thrust, self.mean_motion, self.dt)
+            thrusts[i] = thrust
 
+        # Phase 2: score every live agent against the SAME post-move states.
+        # self._done is not modified until the end, so get_threat_positions_and_velocities
+        # sees the start-of-step live set for every agent.
+        mission_rewards, safety_costs, infos = [], [], []
+        new_done = list(self._done)
+        for i in range(self.n_agents):
+            if not live[i]:
+                mission_rewards.append(0.0)
+                safety_costs.append(0.0)
+                infos.append({"already_done": True})
+                continue
+
+            thrust = thrusts[i]
             separation_to_origin_m = float(np.linalg.norm(self._states[i].position))
             collided_with_origin = separation_to_origin_m < self.collision_radius_m
 
             collided_with_agent = False
             nearest_agent_separation_m = float("inf")
             for j in range(self.n_agents):
-                if j == i or self._done[j]:
+                if j == i or not live[j]:
                     continue
                 sep_ij = float(np.linalg.norm(self._states[i].position - self._states[j].position))
                 nearest_agent_separation_m = min(nearest_agent_separation_m, sep_ij)
@@ -166,7 +173,7 @@ class MultiAgentAvoidanceEnv:
             collided = collided_with_origin or collided_with_agent
             separation_m = min(separation_to_origin_m, nearest_agent_separation_m)
 
-            dv = thrust * self.dt  # thrust is already zeroed if out of fuel
+            dv = thrust * self.dt
             others = self.get_threat_positions_and_velocities(i)
             origin = (-self._states[i].position, -self._states[i].velocity)
             slot_err = np.array([abs(separation_to_origin_m - 1000.0)])
@@ -176,7 +183,7 @@ class MultiAgentAvoidanceEnv:
             self._prev_dv[i] = dv
             safety_cost = c["conj"]
 
-            self._done[i] = collided or self._fuel[i] <= 0.0 or self._step_count >= self.max_steps
+            new_done[i] = collided or self._fuel[i] <= 0.0 or self._step_count >= self.max_steps
 
             mission_rewards.append(mission_reward)
             safety_costs.append(safety_cost)
@@ -191,6 +198,7 @@ class MultiAgentAvoidanceEnv:
                 "cost_sec": c["sec"],
             })
 
+        self._done = new_done
         return self._observations(), MultiAgentStepResult(mission_rewards, safety_costs, list(self._done), infos)
 
     def _observations(self) -> list[np.ndarray]:
