@@ -33,6 +33,7 @@ import torch
 from torch import nn
 
 from constellai.models.marl.ippo import compute_gae
+from constellai.models.marl.joint_obs import joint_observation
 from constellai.models.marl.multi_agent_environment import MultiAgentAvoidanceEnv
 
 DEFAULT_PENALTY_COEFF = 50.0
@@ -114,7 +115,7 @@ def collect_rollout(
     all_done = False
 
     while not all_done:
-        joint_obs = torch.from_numpy(np.concatenate(obs_list)).float()
+        joint_obs = torch.from_numpy(joint_observation(env, obs_list)).float()
         actions = []
         for i in range(n_agents):
             obs = torch.from_numpy(obs_list[i]).float()
