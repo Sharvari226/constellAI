@@ -123,6 +123,16 @@ class MultiAgentAvoidanceEnv:
             threats.append((rel_pos, rel_vel))
         return threats
 
+    def agent_state_vectors(self) -> list[np.ndarray]:
+        """True [position, velocity] 6-vectors of every agent, by agent id (privileged)."""
+        return [np.concatenate([s.position, s.velocity]) for s in self._states]
+
+    def live_mask(self) -> list[bool]:
+        return [not d for d in self._done]
+
+    def fuel_remaining(self) -> list[float]:
+        return list(self._fuel)
+
     def step(self, actions: list[np.ndarray]) -> tuple[list[np.ndarray], MultiAgentStepResult]:
         if len(actions) != self.n_agents:
             raise ValueError(f"expected {self.n_agents} actions, got {len(actions)}")
@@ -196,6 +206,7 @@ class MultiAgentAvoidanceEnv:
                 "collided": collided,
                 "step_count": self._step_count,
                 "cost_sec": c["sec"],
+                "thrust_mps2": np.array(thrust),
             })
 
         self._done = new_done
