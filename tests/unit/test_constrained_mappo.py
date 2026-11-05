@@ -16,6 +16,7 @@ from constellai.models.marl.constrained_mappo import (
 )
 from constellai.models.marl.mappo import Actor, CentralizedCritic
 from constellai.models.marl.multi_agent_environment import MultiAgentAvoidanceEnv
+from constellai.models.marl.objective import PIDLagrange
 
 
 def _make_networks(n_agents=2):
@@ -43,6 +44,7 @@ def test_rollout_keeps_reward_and_cost_separate():
 def test_constrained_update_returns_expected_keys():
     env = MultiAgentAvoidanceEnv(n_agents=2, mean_motion=0.0011, max_steps=15)
     actor, reward_critic, cost_critic = _make_networks()
+    pid = PIDLagrange(budget=0.05)
     trajs = collect_rollout(
         env, actor, reward_critic, cost_critic,
         initial_positions_m=[np.array([1000.0, 0, 0]), np.array([1200.0, 0, 0])],
@@ -53,10 +55,12 @@ def test_constrained_update_returns_expected_keys():
         actor_optimizer=torch.optim.Adam(actor.parameters()),
         reward_critic_optimizer=torch.optim.Adam(reward_critic.parameters()),
         cost_critic_optimizer=torch.optim.Adam(cost_critic.parameters()),
+        pid=pid,
     )
     assert set(result.keys()) == {
         "policy_loss", "reward_value_loss", "cost_value_loss", "mean_cost_return", "lambda"
     }
+    assert result["lambda"] == pid.lam
 
 
 def test_lambda_increases_when_constraint_violated():

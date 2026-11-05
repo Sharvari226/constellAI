@@ -47,6 +47,7 @@ from torch import nn
 from constellai.models.marl.ippo import compute_gae
 from constellai.models.marl.mappo import Actor, CentralizedCritic
 from constellai.models.marl.multi_agent_environment import MultiAgentAvoidanceEnv
+from constellai.models.marl.objective import PIDLagrange
 
 DEFAULT_COST_THRESHOLD_D = 0.05  # target: average per-episode cost-return should stay under this
 DEFAULT_LAMBDA_LR = 0.01
@@ -133,6 +134,7 @@ def constrained_update(
     clip_eps: float = DEFAULT_CLIP_EPS,
     epochs: int = DEFAULT_PPO_EPOCHS,
     entropy_coeff: float = DEFAULT_ENTROPY_COEFF,
+    pid: PIDLagrange | None = None,
 ) -> dict[str, float]:
     """One constrained-PPO update. Returns the UPDATED lambda alongside
     the usual losses -- lambda is not a module parameter, it's returned
@@ -219,7 +221,10 @@ def constrained_update(
     # (a negative lambda would mean "rewarding" unsafe behavior, which
     # is never correct).
     mean_cost_return = cost_ret_batch.mean().item()
-    new_lambda = max(0.0, lagrange_lambda + lambda_lr * (mean_cost_return - cost_threshold_d))
+    if pid is not None:
+        new_lambda = pid.update(mean_cost_return)
+    else:
+        new_lambda = max(0.0, lagrange_lambda + lambda_lr * (mean_cost_return - cost_threshold_d))
 
     return {
         "policy_loss": sum(policy_losses) / epochs,

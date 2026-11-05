@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import argparse
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -27,6 +27,9 @@ from constellai.orbital_mechanics.relative_motion import RelativeState, propagat
 REFERENCE_ALTITUDE_KM = 500.0  # same shell as the M2/M3 synthetic scenarios
 STREAM_TRAIN = 1
 STREAM_EVAL = 2
+STREAM_FC_TRAIN = 3  # forecaster training (never the policy-training scenarios)
+STREAM_FC_VAL = 4    # forecaster model selection and alarm threshold
+STREAM_CAL = 5       # forecaster calibration
 
 
 def reference_mean_motion(altitude_km: float = REFERENCE_ALTITUDE_KM) -> float:
@@ -57,6 +60,13 @@ class ScenarioConfig:
     # reject scenarios whose agents start closer than this to each other / the origin
     min_start_separation_radii: float = 3.0
     max_resample_attempts: int = 100
+
+
+def warning_config(kind: str, **overrides) -> ScenarioConfig:
+    presets = {"short": (150.0, 600.0), "long": (500.0, 1500.0)}
+    if kind not in presets:
+        raise ValueError(f"kind must be one of {sorted(presets)}")
+    return replace(ScenarioConfig(), time_to_tca_s=presets[kind], **overrides)
 
 
 def make_rng(stream: int, seed: int, index: int) -> np.random.Generator:

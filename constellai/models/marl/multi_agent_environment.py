@@ -34,7 +34,8 @@ from constellai.models.marl.environment import (
     DEFAULT_MAX_THRUST_MPS2,
 )
 from constellai.orbital_mechanics.relative_motion import RelativeState, propagate_hcw_step
-
+from constellai.models.marl.objective import (
+    reward as objective_reward, costs as objective_costs, config_for_env)
 
 @dataclass
 class MultiAgentStepResult:
@@ -101,6 +102,8 @@ class MultiAgentAvoidanceEnv:
         self._fuel = [self.fuel_budget] * self.n_agents
         self._done = [False] * self.n_agents
         self._step_count = 0
+        self._obj_cfg = config_for_env(self)
+        self._prev_dv = [np.zeros(3) for _ in range(self.n_agents)]
         return self._observations()
 
     def get_threat_positions_and_velocities(self, agent_id: int) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -120,40 +123,57 @@ class MultiAgentAvoidanceEnv:
             threats.append((rel_pos, rel_vel))
         return threats
 
+    def agent_state_vectors(self) -> list[np.ndarray]:
+        """True [position, velocity] 6-vectors of every agent, by agent id (privileged)."""
+        return [np.concatenate([s.position, s.velocity]) for s in self._states]
+
+    def live_mask(self) -> list[bool]:
+        return [not d for d in self._done]
+
+    def fuel_remaining(self) -> list[float]:
+        return list(self._fuel)
+
     def step(self, actions: list[np.ndarray]) -> tuple[list[np.ndarray], MultiAgentStepResult]:
-        """actions: list of (3,) thrust vectors, one per agent, in the
-        SAME order as reset(). An agent already marked done from a
-        previous step is not re-stepped -- its thrust is ignored and it
-        keeps reporting done=True, mirroring standard multi-agent env
-        convention (agents can finish at different times)."""
         if len(actions) != self.n_agents:
             raise ValueError(f"expected {self.n_agents} actions, got {len(actions)}")
 
-        mission_rewards, safety_costs, infos = [], [], []
         self._step_count += 1
+        live = [not d for d in self._done]   # alive at the START of this step
 
+        # Phase 1: advance every live agent. No collision or cost logic here,
+        # so nothing below depends on the order agents are listed in.
+        thrusts = [np.zeros(3) for _ in range(self.n_agents)]
         for i in range(self.n_agents):
-            if self._done[i]:
-                mission_rewards.append(0.0)
-                safety_costs.append(0.0)
-                infos.append({"already_done": True})
+            if not live[i]:
                 continue
-
             thrust = np.clip(actions[i], -self.max_thrust_mps2, self.max_thrust_mps2)
             fuel_cost = float(np.linalg.norm(thrust)) * self.dt
             self._fuel[i] = max(0.0, self._fuel[i] - fuel_cost)
             if self._fuel[i] <= 0.0 and fuel_cost > 0:
                 thrust = np.zeros(3)
-
             self._states[i] = propagate_hcw_step(self._states[i], thrust, self.mean_motion, self.dt)
+            thrusts[i] = thrust
 
+        # Phase 2: score every live agent against the SAME post-move states.
+        # self._done is not modified until the end, so get_threat_positions_and_velocities
+        # sees the start-of-step live set for every agent.
+        mission_rewards, safety_costs, infos = [], [], []
+        new_done = list(self._done)
+        for i in range(self.n_agents):
+            if not live[i]:
+                mission_rewards.append(0.0)
+                safety_costs.append(0.0)
+                infos.append({"already_done": True})
+                continue
+
+            thrust = thrusts[i]
             separation_to_origin_m = float(np.linalg.norm(self._states[i].position))
             collided_with_origin = separation_to_origin_m < self.collision_radius_m
 
             collided_with_agent = False
             nearest_agent_separation_m = float("inf")
             for j in range(self.n_agents):
-                if j == i or self._done[j]:
+                if j == i or not live[j]:
                     continue
                 sep_ij = float(np.linalg.norm(self._states[i].position - self._states[j].position))
                 nearest_agent_separation_m = min(nearest_agent_separation_m, sep_ij)
@@ -163,11 +183,17 @@ class MultiAgentAvoidanceEnv:
             collided = collided_with_origin or collided_with_agent
             separation_m = min(separation_to_origin_m, nearest_agent_separation_m)
 
-            target_distance_m = 1000.0
-            mission_reward = -abs(separation_m - target_distance_m) / target_distance_m
-            safety_cost = 1.0 if collided else 0.0
+            dv = thrust * self.dt
+            others = self.get_threat_positions_and_velocities(i)
+            origin = (-self._states[i].position, -self._states[i].velocity)
+            slot_err = np.array([abs(separation_to_origin_m - 1000.0)])
 
-            self._done[i] = collided or self._fuel[i] <= 0.0 or self._step_count >= self.max_steps
+            mission_reward = objective_reward(dv, self._prev_dv[i], slot_err, self._obj_cfg)
+            c = objective_costs(dv, thrust, thrust, [origin] + others, others, self._obj_cfg)
+            self._prev_dv[i] = dv
+            safety_cost = c["conj"]
+
+            new_done[i] = collided or self._fuel[i] <= 0.0 or self._step_count >= self.max_steps
 
             mission_rewards.append(mission_reward)
             safety_costs.append(safety_cost)
@@ -179,8 +205,11 @@ class MultiAgentAvoidanceEnv:
                 "fuel_remaining": self._fuel[i],
                 "collided": collided,
                 "step_count": self._step_count,
+                "cost_sec": c["sec"],
+                "thrust_mps2": np.array(thrust),
             })
 
+        self._done = new_done
         return self._observations(), MultiAgentStepResult(mission_rewards, safety_costs, list(self._done), infos)
 
     def _observations(self) -> list[np.ndarray]:
