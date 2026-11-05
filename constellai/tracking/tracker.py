@@ -25,7 +25,8 @@ N_HORIZONS = 4
 
 class TrackedMultiAgentEnv:
     def __init__(self, scaled_env, sigma_p, process_accel_std, sigma_v0=1.0,
-                 noise_seed=0, forecaster=None, selection_horizon_s=600.0):
+                 noise_seed=0, forecaster=None, selection_horizon_s=600.0,
+                 neighbour_thrust_known=False):
         self.scaled = scaled_env
         self.raw = scaled_env.env
         self.n_agents = scaled_env.n_agents
@@ -39,6 +40,7 @@ class TrackedMultiAgentEnv:
         self.noise_seed = noise_seed
         self.forecaster = forecaster
         self.selection_horizon_s = selection_horizon_s
+        self.neighbour_thrust_known = neighbour_thrust_known
         self.obs_dim = 1 + 2 * SLOT_DIM + (2 * N_HORIZONS if forecaster is not None else 0)
         self._episode = 0
         self._primary, self._neighbour = [], {}
@@ -91,7 +93,8 @@ class TrackedMultiAgentEnv:
                 if j == i or not live_before[j]:
                     continue
                 g = self._neighbour[(i, j)]
-                g.predict(known)
+                u_nb = np.asarray(result.infos[j]["thrust_mps2"], dtype=float) if self.neighbour_thrust_known else 0.0
+                g.predict(known + u_nb)
                 g.update(truth[j][:3] - truth[i][:3] + self.sigma_p * noise_nb[i, j])
         obs = []
         for i in range(n):
