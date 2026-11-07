@@ -103,6 +103,8 @@ class MultiAgentAvoidanceEnv:
         self._done = [False] * self.n_agents
         self._step_count = 0
         self._obj_cfg = config_for_env(self)
+        self._nominal = list(self._states)  # zero-thrust reference path per agent
+        self.mission_mode = getattr(self, "mission_mode", "nominal")
         self._prev_dv = [np.zeros(3) for _ in range(self.n_agents)]
         return self._observations()
 
@@ -152,6 +154,7 @@ class MultiAgentAvoidanceEnv:
             if self._fuel[i] <= 0.0 and fuel_cost > 0:
                 thrust = np.zeros(3)
             self._states[i] = propagate_hcw_step(self._states[i], thrust, self.mean_motion, self.dt)
+            self._nominal[i] = propagate_hcw_step(self._nominal[i], np.zeros(3), self.mean_motion, self.dt)
             thrusts[i] = thrust
 
         # Phase 2: score every live agent against the SAME post-move states.
@@ -186,7 +189,10 @@ class MultiAgentAvoidanceEnv:
             dv = thrust * self.dt
             others = self.get_threat_positions_and_velocities(i)
             origin = (-self._states[i].position, -self._states[i].velocity)
-            slot_err = np.array([abs(separation_to_origin_m - 1000.0)])
+            if self.mission_mode == "primary_shell":
+                slot_err = np.array([abs(separation_to_origin_m - 1000.0)])
+            else:
+                slot_err = np.array([float(np.linalg.norm(self._states[i].position - self._nominal[i].position))])
 
             mission_reward = objective_reward(dv, self._prev_dv[i], slot_err, self._obj_cfg)
             c = objective_costs(dv, thrust, thrust, [origin] + others, others, self._obj_cfg)
