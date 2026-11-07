@@ -20,6 +20,7 @@ from constellai.models.marl.objective import predicted_miss
 from constellai.tracking.kalman import PairFilter
 
 SLOT_DIM = 13
+SLOT_ERR_DIM = 6  # own deviation from the nominal path: position/1000 (3) + velocity (3)
 N_HORIZONS = 4
 
 
@@ -41,7 +42,7 @@ class TrackedMultiAgentEnv:
         self.forecaster = forecaster
         self.selection_horizon_s = selection_horizon_s
         self.neighbour_thrust_known = neighbour_thrust_known
-        self.obs_dim = 1 + 2 * SLOT_DIM + (2 * N_HORIZONS if forecaster is not None else 0)
+        self.obs_dim = 1 + SLOT_ERR_DIM + 2 * SLOT_DIM + (2 * N_HORIZONS if forecaster is not None else 0)
         self._episode = 0
         self._primary, self._neighbour = [], {}
         self._last_obs, self._slot1 = [], []
@@ -110,6 +111,10 @@ class TrackedMultiAgentEnv:
         return np.concatenate([[1.0], f.mean[:3] / POSITION_SCALE_M, f.mean[3:],
                                std[:3] / POSITION_SCALE_M, std[3:]])
 
+    def _slot_err(self, i):
+        err = self.raw.slot_errors()[i]
+        return np.concatenate([err[:3] / POSITION_SCALE_M, err[3:]])
+
     def _select_neighbour(self, i, live):
         best, best_miss = None, np.inf
         for j in range(self.n_agents):
@@ -132,7 +137,7 @@ class TrackedMultiAgentEnv:
         j = self._select_neighbour(i, live)
         self._slot1[i] = j
         nb = self._neighbour[(i, j)] if j is not None else None
-        parts = [[fuel], self._slot(primary), self._slot(nb) if nb is not None else np.zeros(SLOT_DIM)]
+        parts = [[fuel], self._slot_err(i), self._slot(primary), self._slot(nb) if nb is not None else np.zeros(SLOT_DIM)]
         if self.forecaster is not None:
             parts.append(self._forecast(primary))
             parts.append(self._forecast(nb) if nb is not None else np.zeros(N_HORIZONS))
@@ -145,8 +150,8 @@ class TrackedMultiAgentEnv:
     def privileged_state(self):
         truth, fuel = self.raw.agent_state_vectors(), self.raw.fuel_remaining()
         return np.concatenate([
-            np.concatenate([x[:3] / POSITION_SCALE_M, x[3:], [f / self.fuel_budget]])
-            for x, f in zip(truth, fuel)
+            np.concatenate([x[:3] / POSITION_SCALE_M, x[3:], [f / self.fuel_budget], self._slot_err(i)])
+            for i, (x, f) in enumerate(zip(truth, fuel))
         ])
 
     joint_observation = privileged_state

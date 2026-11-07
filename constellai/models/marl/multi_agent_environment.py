@@ -132,6 +132,10 @@ class MultiAgentAvoidanceEnv:
     def live_mask(self) -> list[bool]:
         return [not d for d in self._done]
 
+    def slot_errors(self) -> list[np.ndarray]:
+        """True [position, velocity] deviation of each agent from its zero-thrust nominal path."""
+        return [s.as_vector() - n.as_vector() for s, n in zip(self._states, self._nominal)]
+
     def fuel_remaining(self) -> list[float]:
         return list(self._fuel)
 

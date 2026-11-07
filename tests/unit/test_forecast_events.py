@@ -130,5 +130,5 @@ def test_tracker_hook_integration():
                                neighbour_thrust_known=True)
     obs = env.reset([np.array([1000.0, 0, 0]), np.array([0, 1000.0, 0])], [np.zeros(3), np.zeros(3)])
     mean, cov, _ = env.pair_track(0)
-    np.testing.assert_allclose(obs[0][27:31], fc(mean, cov))
-    assert obs[0].shape == (35,) and ((obs[0][27:] >= 0) & (obs[0][27:] <= 1)).all()
+    np.testing.assert_allclose(obs[0][33:37], fc(mean, cov))
+    assert obs[0].shape == (41,) and ((obs[0][33:] >= 0) & (obs[0][33:] <= 1)).all()
