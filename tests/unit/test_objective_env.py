@@ -69,3 +69,49 @@ def test_pair_cost_is_symmetric_under_burn():
     b = a + np.array([3.0 * R, 0, 0])
     res = run(env, [a, b], [Z, np.array([-env.max_thrust_mps2, 0, 0])])
     assert abs(res.safety_costs[0] - res.safety_costs[1]) < 1e-9
+
+
+def test_zero_thrust_earns_zero_mission_reward_from_any_start():
+    from constellai.evaluation.scenarios import STREAM_FC_VAL, make_rng, sample_scenario, warning_config
+    cfg = warning_config("short")
+    for idx in range(5):
+        pos, vel = sample_scenario(make_rng(STREAM_FC_VAL, 0, idx), cfg)
+        env = MultiAgentAvoidanceEnv(n_agents=cfg.n_agents, mean_motion=cfg.mean_motion)
+        env.reset(pos, vel)
+        for _ in range(20):
+            _, res = env.step([Z for _ in range(cfg.n_agents)])
+            assert all(abs(r) < 1e-12 for r in res.mission_rewards)
+            if all(res.dones):
+                break
+
+
+def test_nominal_path_is_independent_zero_thrust_propagation():
+    from constellai.orbital_mechanics.relative_motion import RelativeState, propagate_hcw_step
+    env = make()
+    env.reset([np.array([1000.0, 0, 0]), np.array([0, 1000.0, 0])],
+              [np.array([0.0, 0.3, 0.0]), np.array([0.2, 0.0, 0.0])])
+    nom = RelativeState(position=np.array([1000.0, 0, 0]), velocity=np.array([0.0, 0.3, 0.0]))
+    act = RelativeState(position=nom.position.copy(), velocity=nom.velocity.copy())
+    u = np.array([0.004, -0.002, 0.001])
+    for _ in range(12):
+        env.step([u, Z])
+        nom = propagate_hcw_step(nom, Z, N, env.dt)
+        act = propagate_hcw_step(act, u, N, env.dt)
+    np.testing.assert_allclose(env._nominal[0].position, nom.position, rtol=1e-12, atol=1e-9)
+    np.testing.assert_allclose(env._states[0].position, act.position, rtol=1e-12, atol=1e-9)
+    assert np.linalg.norm(env._states[0].position - env._nominal[0].position) > 1.0
+
+
+def test_primary_shell_mode_reproduces_old_term():
+    pos = [np.array([300.0, 0, 0]), np.array([0, 1000.0, 0])]
+    env = make()
+    env.mission_mode = "primary_shell"
+    env.reset(pos, [Z.copy(), Z.copy()])
+    _, res = env.step([Z, Z])
+    sep = res.infos[0]["separation_to_origin_m"]
+    expected = -min(max(0.0, abs(sep - 1000.0) - 50.0) / 1000.0, 3.0)
+    assert abs(res.mission_rewards[0] - expected) < 1e-12 and expected < -0.5
+    env2 = make()
+    env2.reset(pos, [Z.copy(), Z.copy()])
+    _, res2 = env2.step([Z, Z])
+    assert abs(res2.mission_rewards[0]) < 1e-12

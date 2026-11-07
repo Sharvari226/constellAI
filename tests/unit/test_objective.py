@@ -38,3 +38,11 @@ def test_no_derivative_kick_on_first_update():
     p = PIDLagrange(budget=0.1)
     assert abs(p.update(1.0) - (0.5*0.9 + 0.05*0.9)) < 1e-12
 
+
+def test_tracking_term_is_linear_and_capped():
+    cfg = ObjectiveConfig()
+    z = np.zeros(3)
+    small = reward(z, z, np.array([cfg.deadband + 1.0 * cfg.track_scale]), cfg)
+    assert abs(small + cfg.w_track * 1.0) < 1e-12
+    huge = reward(z, z, np.array([1e9]), cfg)
+    assert abs(huge + cfg.w_track * 3.0) < 1e-12

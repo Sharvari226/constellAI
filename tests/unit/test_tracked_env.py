@@ -38,8 +38,8 @@ def test_observation_shapes_and_primary_valid():
     pos, vel = far_start(2)
     a, b = build(), build(forecaster=DUMMY)
     oa, ob = a.reset(pos, vel), b.reset(pos, vel)
-    assert all(o.shape == (27,) for o in oa) and all(o.shape == (35,) for o in ob)
-    assert all(o[1] == 1.0 for o in oa)  # primary slot valid flag
+    assert all(o.shape == (33,) for o in oa) and all(o.shape == (41,) for o in ob)
+    assert all(o[7] == 1.0 for o in oa)  # primary slot valid flag
 
 
 def test_arm_a_is_exact_prefix_of_arm_b():
@@ -49,8 +49,8 @@ def test_arm_a_is_exact_prefix_of_arm_b():
     ob = rollout(build(3, forecaster=DUMMY), 3, seq)
     for ta, tb in zip(oa, ob):
         for xa, xb in zip(ta, tb):
-            np.testing.assert_array_equal(xa, xb[:27])
-            np.testing.assert_allclose(xb[27:], 0.25)
+            np.testing.assert_array_equal(xa, xb[:33])
+            np.testing.assert_allclose(xb[33:], 0.25)
 
 
 def test_determinism_and_seed_sensitivity():
@@ -81,7 +81,7 @@ def test_done_threat_is_dropped_and_done_ego_is_frozen():
     obs, _ = env.step([Z, Z, Z])
     assert env.raw.live_mask() == [True, True, False]
     assert env.slot1_index(0) == 1 and env.slot1_index(1) == 0
-    assert obs[0][14] == 1.0 and obs[1][14] == 1.0
+    assert obs[0][20] == 1.0 and obs[1][20] == 1.0
     obs2, _ = env.step([Z, Z, Z])
     np.testing.assert_array_equal(obs2[2], obs[2])
 
@@ -92,7 +92,7 @@ def test_pair_collision_clears_slot1():
     env.reset([a, a + np.array([25.0, 0, 0])], [Z.copy(), Z.copy()], episode_index=0)
     obs, _ = env.step([Z, Z])
     assert env.raw.live_mask() == [False, False]
-    assert obs[0][14] == 0.0 and obs[1][14] == 0.0
+    assert obs[0][20] == 0.0 and obs[1][20] == 0.0
 
 
 def test_privileged_state_matches_scaled_layout():
@@ -102,7 +102,9 @@ def test_privileged_state_matches_scaled_layout():
     ref = np.concatenate(ScaledMultiAgentEnv(raw, 2, raw.max_thrust_mps2, raw.dt).reset(pos, vel))
     env = build(2)
     env.reset(pos, vel)
-    np.testing.assert_allclose(env.privileged_state(), ref, rtol=1e-12)
+    got = env.privileged_state().reshape(2, 13)
+    np.testing.assert_allclose(got[:, :7].reshape(-1), ref, rtol=1e-12)
+    np.testing.assert_allclose(got[:, 7:], 0.0, atol=1e-12)
 
 
 def test_rewards_and_costs_pass_through_unchanged():
@@ -117,3 +119,19 @@ def test_rewards_and_costs_pass_through_unchanged():
     _, r_env = env.step(acts)
     assert r_ref.mission_rewards == r_env.mission_rewards
     assert r_ref.safety_costs == r_env.safety_costs
+
+
+def test_slot_error_is_observed_and_matches_reward_input():
+    env = build(2)
+    pos, vel = far_start(2)
+    obs = env.reset(pos, vel, episode_index=0)
+    np.testing.assert_allclose(obs[0][1:7], 0.0, atol=1e-12)
+    for _ in range(25):
+        obs, _ = env.step([np.array([1.0, 0.0, 0.0]), Z])
+    d_obs = np.linalg.norm(obs[0][1:4]) * 1000.0
+    d_raw = np.linalg.norm(env.raw._states[0].position - env.raw._nominal[0].position)
+    assert d_raw > 100.0
+    np.testing.assert_allclose(d_obs, d_raw, rtol=1e-9)
+    np.testing.assert_allclose(obs[1][1:7], 0.0, atol=1e-9)
+    priv = env.privileged_state().reshape(2, 13)
+    np.testing.assert_allclose(priv[0, 7:], obs[0][1:7], atol=1e-12)

@@ -29,9 +29,9 @@ def shaped_risk(d, cfg):
 
 def reward(dv, dv_prev, slot_err, cfg):
     fuel = np.linalg.norm(dv) / cfg.dv_max
-    track = max(0.0, np.linalg.norm(slot_err) - cfg.deadband) / cfg.track_scale
+    track = min(max(0.0, np.linalg.norm(slot_err) - cfg.deadband) / cfg.track_scale, 3.0)
     smooth = np.linalg.norm(np.asarray(dv) - np.asarray(dv_prev)) / cfg.dv_max
-    return -(cfg.w_fuel * fuel + cfg.w_track * track**2 + cfg.w_smooth * smooth)
+    return -(cfg.w_fuel * fuel + cfg.w_track * track + cfg.w_smooth * smooth)
 
 def costs(dv, a_policy, a_filtered, threats, others, cfg):
     """threats/others: lists of (r_rel, v_rel). Returns dict of per-step costs."""

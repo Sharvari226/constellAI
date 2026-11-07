@@ -32,14 +32,14 @@ class LoadedCheckpoint:
     meta: dict
 
 
-def build_networks(rung: str, n_agents: int, max_thrust_mps2: float = 0.01, actor_obs_dim: int = 7) -> dict:
+def build_networks(rung: str, n_agents: int, max_thrust_mps2: float = 0.01, actor_obs_dim: int = 7, critic_obs_dim: int = 7) -> dict:
     # fresh, untrained networks with the same architecture training uses
     if rung == "reinforce":
         return {"policy": GaussianPolicy(), "value": ValueNet()}
     if rung == "ippo":
         return {"policy": ActorCritic()}
     if rung == "mappo":
-        return {"actor": Actor(obs_dim=actor_obs_dim), "critic": CentralizedCritic(n_agents=n_agents)}
+        return {"actor": Actor(obs_dim=actor_obs_dim), "critic": CentralizedCritic(n_agents=n_agents, obs_dim=critic_obs_dim)}
     if rung == "maddpg":
         return {
             "actor": DeterministicActor(max_action=max_thrust_mps2),
@@ -48,13 +48,13 @@ def build_networks(rung: str, n_agents: int, max_thrust_mps2: float = 0.01, acto
     if rung == "constrained_mappo":
         return {
             "actor": Actor(obs_dim=actor_obs_dim),
-            "reward_critic": CentralizedCritic(n_agents=n_agents),
-            "cost_critic": CentralizedCritic(n_agents=n_agents),
+            "reward_critic": CentralizedCritic(n_agents=n_agents, obs_dim=critic_obs_dim),
+            "cost_critic": CentralizedCritic(n_agents=n_agents, obs_dim=critic_obs_dim),
         }
     raise ValueError(f"unknown rung {rung!r}; expected one of {RUNG_NAMES}")
 
 
-def save_checkpoint(path, rung: str, n_agents: int, max_thrust_mps2: float, networks: dict, meta: dict, actor_obs_dim: int = 7) -> None:
+def save_checkpoint(path, rung: str, n_agents: int, max_thrust_mps2: float, networks: dict, meta: dict, actor_obs_dim: int = 7, critic_obs_dim: int = 7) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -63,6 +63,7 @@ def save_checkpoint(path, rung: str, n_agents: int, max_thrust_mps2: float, netw
         "n_agents": n_agents,
         "max_thrust_mps2": max_thrust_mps2,
         "actor_obs_dim": actor_obs_dim,
+        "critic_obs_dim": critic_obs_dim,
         "state_dicts": {name: net.state_dict() for name, net in networks.items()},
         # JSON round trip keeps meta to plain types so weights_only loading works
         "meta": json.loads(json.dumps(meta)),
@@ -74,7 +75,7 @@ def load_checkpoint(path) -> LoadedCheckpoint:
     payload = torch.load(Path(path), map_location="cpu", weights_only=True)
     if payload["format_version"] != FORMAT_VERSION:
         raise ValueError(f"unsupported checkpoint format {payload['format_version']}")
-    networks = build_networks(payload["rung"], payload["n_agents"], payload["max_thrust_mps2"], payload.get("actor_obs_dim", 7))
+    networks = build_networks(payload["rung"], payload["n_agents"], payload["max_thrust_mps2"], payload.get("actor_obs_dim", 7), payload.get("critic_obs_dim", 7))
     for name, net in networks.items():
         net.load_state_dict(payload["state_dicts"][name])
         net.eval()

@@ -59,12 +59,12 @@ def test_constrained_mappo_trains_on_tracked_observations():
     raw = MultiAgentAvoidanceEnv(n_agents=2, mean_motion=N, max_steps=8)
     scaled = ScaledMultiAgentEnv(raw, 2, raw.max_thrust_mps2, raw.dt)
     env = TrackedMultiAgentEnv(scaled, sigma_p=25.0, process_accel_std=0.0, neighbour_thrust_known=True)
-    nets = build_networks("constrained_mappo", 2, 1.0, actor_obs_dim=env.obs_dim)
+    nets = build_networks("constrained_mappo", 2, 1.0, actor_obs_dim=env.obs_dim, critic_obs_dim=13)
     actor, rc, cc = nets["actor"], nets["reward_critic"], nets["cost_critic"]
     pos = [np.array([1000.0, 0, 0]), np.array([0, 1000.0, 0])]
     trajs = collect_rollout(env, actor, rc, cc, pos, [Z.copy(), Z.copy()])
-    assert trajs[0].observations[0].shape == (27,)
-    assert trajs[0].joint_observations[0].shape == (2 * 7,)
+    assert trajs[0].observations[0].shape == (33,)
+    assert trajs[0].joint_observations[0].shape == (2 * 13,)
     out = constrained_update(
         trajs, actor, rc, cc, lagrange_lambda=1.0,
         actor_optimizer=torch.optim.Adam(actor.parameters()),
@@ -72,3 +72,11 @@ def test_constrained_mappo_trains_on_tracked_observations():
         cost_critic_optimizer=torch.optim.Adam(cc.parameters()),
     )
     assert all(np.isfinite(v) for v in out.values())
+
+
+def test_critic_obs_dim_is_configurable_and_roundtrips(tmp_path):
+    nets = build_networks("constrained_mappo", 2, 1.0, actor_obs_dim=33, critic_obs_dim=13)
+    assert list(nets["reward_critic"].parameters())[0].shape[1] == 2 * 13 + 2
+    path = tmp_path / "ck2.pt"
+    save_checkpoint(path, "constrained_mappo", 2, 1.0, nets, {"seed": 0}, actor_obs_dim=33, critic_obs_dim=13)
+    load_checkpoint(path)  # raises on a size mismatch
