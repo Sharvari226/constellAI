@@ -18,6 +18,8 @@ import numpy as np
 from constellai.evaluation.scaled_env import POSITION_SCALE_M
 from constellai.models.marl.objective import predicted_miss
 from constellai.tracking.kalman import PairFilter
+from constellai.models.marl.multi_agent_environment import MultiAgentStepResult
+from constellai.forecasting.events import cumulative_labels
 
 SLOT_DIM = 13
 SLOT_ERR_DIM = 6  # own deviation from the nominal path: position/1000 (3) + velocity (3)
@@ -27,7 +29,7 @@ N_HORIZONS = 4
 class TrackedMultiAgentEnv:
     def __init__(self, scaled_env, sigma_p, process_accel_std, sigma_v0=1.0,
                  noise_seed=0, forecaster=None, selection_horizon_s=600.0,
-                 neighbour_thrust_known=False):
+                 neighbour_thrust_known=False, oracle=None, reward_scale=1.0):
         self.scaled = scaled_env
         self.raw = scaled_env.env
         self.n_agents = scaled_env.n_agents
@@ -42,7 +44,10 @@ class TrackedMultiAgentEnv:
         self.forecaster = forecaster
         self.selection_horizon_s = selection_horizon_s
         self.neighbour_thrust_known = neighbour_thrust_known
-        self.obs_dim = 1 + SLOT_ERR_DIM + 2 * SLOT_DIM + (2 * N_HORIZONS if forecaster is not None else 0)
+        self.oracle = oracle
+        self.reward_scale = reward_scale
+        assert forecaster is None or oracle is None, "use either a forecaster or the oracle, not both"
+        self.obs_dim = 1 + SLOT_ERR_DIM + 2 * SLOT_DIM + (2 * N_HORIZONS if (forecaster is not None or oracle is not None) else 0)
         self._episode = 0
         self._primary, self._neighbour = [], {}
         self._last_obs, self._slot1 = [], []
@@ -102,6 +107,8 @@ class TrackedMultiAgentEnv:
             if live_before[i]:
                 self._last_obs[i] = self._build_obs(i, live_after)
             obs.append(self._last_obs[i].copy())
+        if self.reward_scale != 1.0:
+            result = MultiAgentStepResult([r * self.reward_scale for r in result.mission_rewards], result.safety_costs, result.dones, result.infos)
         return obs, result
 
     # ---- observation building -------------------------------------------
@@ -126,6 +133,12 @@ class TrackedMultiAgentEnv:
                 best, best_miss = j, miss
         return best
 
+    def _oracle_forecast(self, i, j):
+        truth = self.raw.agent_state_vectors()
+        x0 = -truth[i] if j is None else truth[j] - truth[i]
+        first = self.oracle.engine.first_entry(x0)
+        return cumulative_labels(first, self.oracle.steps)[0]
+
     def _forecast(self, f):
         out = np.asarray(self.forecaster(f.mean, f.cov), dtype=float)
         assert out.shape == (N_HORIZONS,), out.shape
@@ -141,6 +154,9 @@ class TrackedMultiAgentEnv:
         if self.forecaster is not None:
             parts.append(self._forecast(primary))
             parts.append(self._forecast(nb) if nb is not None else np.zeros(N_HORIZONS))
+        elif self.oracle is not None:
+            parts.append(self._oracle_forecast(i, None))
+            parts.append(self._oracle_forecast(i, j) if j is not None else np.zeros(N_HORIZONS))
         return np.concatenate(parts)
 
     # ---- privileged / diagnostic accessors ------------------------------

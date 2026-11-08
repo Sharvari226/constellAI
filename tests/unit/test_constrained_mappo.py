@@ -59,7 +59,7 @@ def test_constrained_update_returns_expected_keys():
     )
     assert set(result.keys()) == {
         "policy_loss", "reward_value_loss", "cost_value_loss", "mean_cost_return", "lambda",
-        "reward_explained_variance", "cost_explained_variance"
+        "reward_explained_variance", "cost_explained_variance", "observed_discounted_cost"
     }
     assert result["lambda"] == pid.lam
 

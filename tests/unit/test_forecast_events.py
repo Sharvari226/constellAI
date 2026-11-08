@@ -132,3 +132,34 @@ def test_tracker_hook_integration():
     mean, cov, _ = env.pair_track(0)
     np.testing.assert_allclose(obs[0][33:37], fc(mean, cov))
     assert obs[0].shape == (41,) and ((obs[0][33:] >= 0) & (obs[0][33:] <= 1)).all()
+
+
+def test_oracle_forecast_is_exact_and_changes_nothing_else():
+    def build(oracle):
+        raw = MultiAgentAvoidanceEnv(n_agents=3, mean_motion=N)
+        scaled = ScaledMultiAgentEnv(raw, 3, raw.max_thrust_mps2, raw.dt)
+        return TrackedMultiAgentEnv(scaled, sigma_p=25.0, process_accel_std=0.0,
+                                    neighbour_thrust_known=True, oracle=oracle)
+    oracle = forecaster(n=10)
+    a, b = build(None), build(oracle)
+    assert a.obs_dim == 33 and b.obs_dim == 41
+    for idx in range(6):
+        pos, vel, truth = scenario(idx)
+        oa = a.reset(pos, vel, episode_index=idx)
+        ob = b.reset(pos, vel, episode_index=idx)
+        for i in range(3):
+            np.testing.assert_array_equal(oa[i], ob[i][:33])
+            first = oracle.engine.first_entry(-truth[i])
+            np.testing.assert_array_equal(ob[i][33:37], cumulative_labels(first, oracle.steps)[0])
+            j = b.slot1_index(i)
+            assert j is not None
+            first_j = oracle.engine.first_entry(truth[j] - truth[i])
+            np.testing.assert_array_equal(ob[i][37:41], cumulative_labels(first_j, oracle.steps)[0])
+
+
+def test_forecaster_and_oracle_are_mutually_exclusive():
+    raw = MultiAgentAvoidanceEnv(n_agents=2, mean_motion=N)
+    scaled = ScaledMultiAgentEnv(raw, 2, raw.max_thrust_mps2, raw.dt)
+    with pytest.raises(AssertionError):
+        TrackedMultiAgentEnv(scaled, sigma_p=25.0, process_accel_std=0.0,
+                             forecaster=forecaster(n=10), oracle=forecaster(n=10))

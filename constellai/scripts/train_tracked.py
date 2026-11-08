@@ -21,6 +21,7 @@ from constellai.forecasting.events import AnalyticForecaster
 from constellai.models.marl import constrained_mappo
 from constellai.models.marl.checkpoint import build_networks, save_checkpoint
 from constellai.models.marl.multi_agent_environment import MultiAgentAvoidanceEnv
+from constellai.models.marl.objective import PIDLagrange
 from constellai.tracking.tracker import TrackedMultiAgentEnv
 
 _spec = importlib.util.spec_from_file_location("train_m4_ladder", Path(__file__).with_name("train_m4_ladder.py"))
@@ -38,10 +39,12 @@ def make_env(cfg, args, seed):
     raw.mission_mode = args.mission
     scaled = ScaledMultiAgentEnv(raw, cfg.n_agents, cfg.max_thrust_mps2, cfg.dt, fuel_weight=args.fuel_weight)
     forecaster = None
+    oracle = AnalyticForecaster(cfg.mean_motion, cfg.dt, cfg.collision_radius_m, n_samples=1) if args.forecast == "oracle" else None
     if args.forecast == "analytic":
         forecaster = AnalyticForecaster(cfg.mean_motion, cfg.dt, cfg.collision_radius_m, n_samples=args.mc_samples)
     return TrackedMultiAgentEnv(scaled, sigma_p=args.sigma_p, process_accel_std=0.0, noise_seed=seed,
-                                neighbour_thrust_known=True, forecaster=forecaster)
+                                neighbour_thrust_known=True, forecaster=forecaster, oracle=oracle,
+                                reward_scale=args.reward_scale)
 
 
 def main():
@@ -52,12 +55,14 @@ def main():
     p.add_argument("--n-agents", type=int, default=3)
     p.add_argument("--sigma-p", type=float, default=25.0)
     p.add_argument("--mission", choices=["nominal", "primary_shell"], default="nominal")
-    p.add_argument("--forecast", choices=["none", "analytic"], default="none")
+    p.add_argument("--forecast", choices=["none", "analytic", "oracle"], default="none")
     p.add_argument("--mc-samples", type=int, default=500)
+    p.add_argument("--reward-scale", type=float, default=1.0, help="fixed multiplier on mission rewards (critic-scale control)")
     p.add_argument("--lr", type=float, default=5e-3)
     p.add_argument("--action-std", type=float, default=ladder.DEFAULT_ACTION_STD)
     p.add_argument("--fuel-weight", type=float, default=ladder.DEFAULT_FUEL_WEIGHT)
     p.add_argument("--initial-lambda", type=float, default=1.0)
+    p.add_argument("--budget", type=float, default=None, help="per-agent discounted shaped-cost budget d; enables the PID multiplier")
     p.add_argument("--log-every", type=int, default=50)
     p.add_argument("--out-dir", required=True)
     args = p.parse_args()
@@ -82,6 +87,7 @@ def main():
     log = ladder._make_logger("constrained_mappo", args.seed, args.log_every)
 
     lam, history = args.initial_lambda, []
+    pid = PIDLagrange(budget=args.budget) if args.budget is not None else None
     print(f"tracked constrained_mappo: seed {args.seed}, {args.episodes} episodes, preset {args.preset}, "
           f"mission {args.mission}, sigma_p {args.sigma_p}, forecast {args.forecast}, actor obs {env.obs_dim}")
     for ep in range(args.episodes):
@@ -89,7 +95,7 @@ def main():
         trajs = constrained_mappo.collect_rollout(env, actor, rc, cc, positions, velocities)
         out = constrained_mappo.constrained_update(
             trajs, actor, rc, cc, lagrange_lambda=lam,
-            actor_optimizer=a_opt, reward_critic_optimizer=r_opt, cost_critic_optimizer=c_opt,
+            actor_optimizer=a_opt, reward_critic_optimizer=r_opt, cost_critic_optimizer=c_opt, pid=pid,
         )
         lam = out["lambda"]
         row = ladder._ppo_row(ep, trajs, max(len(t.mission_rewards) for t in trajs))
@@ -114,7 +120,7 @@ def main():
     print(f"SUMMARY mission={args.mission} sigma_p={args.sigma_p}: reward EV first{k} {med(ev[:k]):.2f} "
           f"last{k} {med(ev[-k:]):.2f} | cost EV first{k} {med(cev[:k]):.2f} last{k} {med(cev[-k:]):.2f} | "
           f"reward loss last{k} median {med(loss[-k:]):.1f} | "
-          f"collision episodes {sum(bool(h['any_collision']) for h in history)} | lambda end {history[-1]['lambda']:.3f}")
+          f"collision episodes {sum(bool(h['any_collision']) for h in history)} | lambda end {history[-1]['lambda']:.3f} | observed cost last{k} median {med([h['observed_discounted_cost'] for h in history][-k:]):.2f}")
 
 
 if __name__ == "__main__":
