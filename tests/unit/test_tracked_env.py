@@ -135,3 +135,22 @@ def test_slot_error_is_observed_and_matches_reward_input():
     np.testing.assert_allclose(obs[1][1:7], 0.0, atol=1e-9)
     priv = env.privileged_state().reshape(2, 13)
     np.testing.assert_allclose(priv[0, 7:], obs[0][1:7], atol=1e-12)
+
+
+def test_reward_scale_scales_rewards_only():
+    def mk(scale):
+        raw = MultiAgentAvoidanceEnv(n_agents=2, mean_motion=N)
+        scaled = ScaledMultiAgentEnv(raw, 2, raw.max_thrust_mps2, raw.dt)
+        return TrackedMultiAgentEnv(scaled, sigma_p=25.0, process_accel_std=0.0,
+                                    neighbour_thrust_known=True, reward_scale=scale)
+    pos, vel = far_start(2)
+    a, b = mk(1.0), mk(0.1)
+    a.reset(pos, vel, episode_index=0)
+    b.reset(pos, vel, episode_index=0)
+    acts = [np.array([0.5, -0.5, 0.2]), np.array([-0.1, 0.3, 0.0])]
+    oa, ra = a.step(acts)
+    ob, rb = b.step(acts)
+    assert min(abs(r) for r in ra.mission_rewards) > 0.0
+    np.testing.assert_allclose(np.array(rb.mission_rewards), 0.1 * np.array(ra.mission_rewards), rtol=1e-12)
+    assert rb.safety_costs == ra.safety_costs
+    np.testing.assert_array_equal(np.concatenate(oa), np.concatenate(ob))

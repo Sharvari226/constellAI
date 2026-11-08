@@ -52,6 +52,7 @@ from constellai.models.marl.objective import PIDLagrange
 
 DEFAULT_COST_THRESHOLD_D = 0.05  # target: average per-episode cost-return should stay under this
 DEFAULT_LAMBDA_LR = 0.01
+OBSERVED_COST_GAMMA = 0.99  # discount of the observed per-agent episode cost fed to the multiplier
 DEFAULT_CLIP_EPS = 0.2
 DEFAULT_PPO_EPOCHS = 4
 DEFAULT_ENTROPY_COEFF = 0.01
@@ -222,12 +223,14 @@ def constrained_update(
     # (a negative lambda would mean "rewarding" unsafe behavior, which
     # is never correct).
     mean_cost_return = cost_ret_batch.mean().item()
+    _per_agent = [sum((OBSERVED_COST_GAMMA ** t) * c for t, c in enumerate(traj.safety_costs)) for traj in trajs if traj.safety_costs]
+    observed_cost = sum(_per_agent) / max(len(_per_agent), 1)
     _rv, _rr = reward_values.detach().reshape(-1), reward_ret_batch.reshape(-1)
     _cv, _cr = cost_values.detach().reshape(-1), cost_ret_batch.reshape(-1)
     reward_ev = 1.0 - (_rr - _rv).var().item() / (_rr.var().item() + 1e-8)
     cost_ev = 1.0 - (_cr - _cv).var().item() / (_cr.var().item() + 1e-8)
     if pid is not None:
-        new_lambda = pid.update(mean_cost_return)
+        new_lambda = pid.update(observed_cost)
     else:
         new_lambda = max(0.0, lagrange_lambda + lambda_lr * (mean_cost_return - cost_threshold_d))
 
@@ -238,5 +241,6 @@ def constrained_update(
         "mean_cost_return": mean_cost_return,
         "reward_explained_variance": reward_ev,
         "cost_explained_variance": cost_ev,
+        "observed_discounted_cost": observed_cost,
         "lambda": new_lambda,
     }

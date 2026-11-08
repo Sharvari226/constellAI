@@ -80,3 +80,26 @@ def test_critic_obs_dim_is_configurable_and_roundtrips(tmp_path):
     path = tmp_path / "ck2.pt"
     save_checkpoint(path, "constrained_mappo", 2, 1.0, nets, {"seed": 0}, actor_obs_dim=33, critic_obs_dim=13)
     load_checkpoint(path)  # raises on a size mismatch
+
+
+def test_pid_uses_observed_discounted_cost():
+    from constellai.models.marl.objective import PIDLagrange
+    raw = MultiAgentAvoidanceEnv(n_agents=2, mean_motion=N, max_steps=8)
+    scaled = ScaledMultiAgentEnv(raw, 2, raw.max_thrust_mps2, raw.dt)
+    env = TrackedMultiAgentEnv(scaled, sigma_p=25.0, process_accel_std=0.0, neighbour_thrust_known=True)
+    nets = build_networks("constrained_mappo", 2, 1.0, actor_obs_dim=env.obs_dim, critic_obs_dim=13)
+    actor, rc, cc = nets["actor"], nets["reward_critic"], nets["cost_critic"]
+    pos = [np.array([120.0, 0, 0]), np.array([0, 150.0, 0])]
+    trajs = collect_rollout(env, actor, rc, cc, pos, [Z.copy(), Z.copy()])
+    expected = np.mean([sum(0.99 ** t * c for t, c in enumerate(tr.safety_costs)) for tr in trajs])
+    pid = PIDLagrange(budget=0.05)
+    out = constrained_update(
+        trajs, actor, rc, cc, lagrange_lambda=1.0,
+        actor_optimizer=torch.optim.Adam(actor.parameters()),
+        reward_critic_optimizer=torch.optim.Adam(rc.parameters()),
+        cost_critic_optimizer=torch.optim.Adam(cc.parameters()),
+        pid=pid,
+    )
+    assert abs(out["observed_discounted_cost"] - expected) < 1e-9
+    assert out["observed_discounted_cost"] > 0.0
+    assert out["lambda"] == pid.lam
