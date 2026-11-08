@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from constellai.evaluation.heuristic import ThresholdHeuristicPolicy
 from constellai.evaluation.scaled_env import POLICY_ACTION_LIMIT, ScaledMultiAgentEnv
 from constellai.evaluation.scenarios import STREAM_EVAL, warning_config
 from constellai.evaluation.trials import ConstantBurnPolicy, ZeroPolicy, run_trials, summarize_trials
@@ -62,6 +63,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ckpt", nargs="*", default=[])
     p.add_argument("--baselines", action="store_true", help="also run zero-thrust and full-burn")
+    p.add_argument("--heuristic-tau", type=float, nargs="*", default=[], help="threshold-heuristic trigger radii (x collision radius)")
     p.add_argument("--trials", type=int, default=200)
     p.add_argument("--preset", choices=["short", "long"], default="short")
     p.add_argument("--n-agents", type=int, default=3)
@@ -86,6 +88,9 @@ def main():
         base = dict(sigma_p=args.sigma_p if args.sigma_p is not None else 25.0, forecast="none", mission="nominal")
         jobs.append(("zero_thrust", ZeroPolicy(), base, None))
         jobs.append(("constant_burn", ConstantBurnPolicy(POLICY_ACTION_LIMIT), base, None))
+    for tau in args.heuristic_tau:
+        hb = dict(sigma_p=args.sigma_p if args.sigma_p is not None else 25.0, forecast="none", mission="nominal")
+        jobs.append((f"heuristic_tau{tau:g}", ThresholdHeuristicPolicy(tau, cfg.collision_radius_m), hb, None))
 
     print(f"stream {stream} ({'FINAL TEST' if args.final else 'pilot'}), preset {args.preset}, "
           f"{args.trials} trials, noise seed {args.noise_seed}")
