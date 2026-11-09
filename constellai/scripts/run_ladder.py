@@ -19,6 +19,8 @@ FAMILIES = {
     "E": ["--heuristic-tau", "1.2", "1.5", "2", "3", "5"],
     "F": ["--prob-trigger", "0.02", "0.05", "0.1", "0.2", "0.4", "--forecast-kind", "analytic", "--prob-horizon", "3"],
     "B": ["--prob-trigger", "0.5", "--forecast-kind", "oracle", "--prob-horizon", "3"],
+    "E2": ["--heuristic-tau", "0.9", "1.0", "1.05", "1.1"],
+    "F2": ["--prob-trigger", "0.03", "0.07", "0.15", "0.3", "--forecast-kind", "analytic", "--prob-horizon", "3"],
 }
 
 
