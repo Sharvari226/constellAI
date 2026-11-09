@@ -1,0 +1,84 @@
+import numpy as np
+import pytest
+
+from constellai.evaluation.heuristic import SLOT0, SLOT1, ThresholdHeuristicPolicy, closest_approach
+from constellai.evaluation.scaled_env import ScaledMultiAgentEnv
+from constellai.evaluation.scenarios import STREAM_FC_VAL, warning_config
+from constellai.evaluation.trials import ZeroPolicy, run_trials, summarize_trials
+from constellai.evaluation.triggers import (
+    FC0, FC1, DistanceTriggerPolicy, ProbabilityTriggerPolicy, away_direction,
+)
+from constellai.forecasting.events import AnalyticForecaster
+from constellai.models.marl.multi_agent_environment import MultiAgentAvoidanceEnv
+from constellai.tracking.tracker import TrackedMultiAgentEnv
+
+RC = 50.0
+
+
+def obs41(slot0=None, slot1=None, fc0=(0, 0, 0, 0), fc1=(0, 0, 0, 0)):
+    o = np.zeros(41)
+    for start, s in ((SLOT0, slot0), (SLOT1, slot1)):
+        if s is not None:
+            pos, vel = s
+            o[start] = 1.0
+            o[start + 1:start + 4] = np.asarray(pos, dtype=float) / 1000.0
+            o[start + 4:start + 7] = vel
+    o[FC0:FC0 + 4] = fc0
+    o[FC1:FC1 + 4] = fc1
+    return o
+
+
+def test_direction_rule_matches_threshold_heuristic():
+    rng = np.random.default_rng(0)
+    cases = [(np.array([500.0, 0.0, 0.0]), np.array([-1.0, 0.0, 0.0]))]  # exactly head-on
+    for _ in range(40):
+        cases.append((rng.normal(0, 400, 3), rng.normal(0, 0.6, 3)))
+    h = ThresholdHeuristicPolicy(1e6, RC)  # trigger radius so large that it always acts
+    for pos, vel in cases:
+        _, m = closest_approach(pos, vel, 600.0)
+        np.testing.assert_allclose(h.act([obs41(slot0=(pos, vel))])[0], away_direction(m, vel), atol=1e-12)
+
+
+def test_distance_trigger_behaviour():
+    pol = DistanceTriggerPolicy(4.0, RC)  # acts inside 200 m
+    far = obs41(slot0=([500.0, 0, 0], [-1.0, 0, 0]))
+    np.testing.assert_array_equal(pol.act([far])[0], np.zeros(3))
+    near = obs41(slot0=([120.0, 0, 90.0], [-0.5, 0, 0]))  # 150 m away
+    np.testing.assert_allclose(pol.act([near])[0], -np.array([120.0, 0, 90.0]) / 150.0, atol=1e-12)
+    closer = obs41(slot0=([120.0, 0, 90.0], [-0.5, 0, 0]), slot1=([0.0, 60.0, 0.0], [0, 0.1, 0]))
+    np.testing.assert_allclose(pol.act([closer])[0], [0.0, -1.0, 0.0], atol=1e-12)
+    invalid = near.copy()
+    invalid[SLOT0] = 0.0
+    np.testing.assert_array_equal(pol.act([invalid])[0], np.zeros(3))
+
+
+def test_probability_trigger_behaviour():
+    pol = ProbabilityTriggerPolicy(0.1, 3)
+    pos, vel = [500.0, 20.0, 0.0], [-1.0, 0.0, 0.0]
+    low = obs41(slot0=(pos, vel), fc0=(0, 0, 0, 0.05))
+    np.testing.assert_array_equal(pol.act([low])[0], np.zeros(3))
+    high = obs41(slot0=(pos, vel), fc0=(0, 0, 0, 0.30))
+    np.testing.assert_allclose(pol.act([high])[0], [0.0, -1.0, 0.0], atol=1e-12)
+    other = obs41(slot0=(pos, vel), fc0=(0, 0.9, 0, 0.0))  # high value at horizon 1 only
+    np.testing.assert_array_equal(pol.act([other])[0], np.zeros(3))
+    assert np.abs(ProbabilityTriggerPolicy(0.1, 1).act([other])[0]).sum() > 0
+    two = obs41(slot0=([500.0, 20.0, 0.0], [-1.0, 0, 0]), slot1=([400.0, 0.0, -10.0], [-1.0, 0, 0]),
+                fc0=(0, 0, 0, 0.2), fc1=(0, 0, 0, 0.6))
+    np.testing.assert_allclose(pol.act([two])[0], [0.0, 0.0, 1.0], atol=1e-12)
+    with pytest.raises(ValueError):
+        pol.act([np.zeros(33)])
+
+
+def test_oracle_trigger_runs_and_is_frugal():
+    cfg = warning_config("short")
+    raw = MultiAgentAvoidanceEnv(n_agents=cfg.n_agents, mean_motion=cfg.mean_motion, dt=cfg.dt,
+                                 collision_radius_m=cfg.collision_radius_m,
+                                 max_thrust_mps2=cfg.max_thrust_mps2, max_steps=cfg.max_steps)
+    scaled = ScaledMultiAgentEnv(raw, cfg.n_agents, cfg.max_thrust_mps2, cfg.dt)
+    oracle = AnalyticForecaster(cfg.mean_motion, cfg.dt, cfg.collision_radius_m, n_samples=1)
+    env = TrackedMultiAgentEnv(scaled, sigma_p=5.0, process_accel_std=0.0, neighbour_thrust_known=True, oracle=oracle)
+    zero = summarize_trials(run_trials(env, ZeroPolicy(), cfg, 20, seed=0, stream=STREAM_FC_VAL))
+    trig = summarize_trials(run_trials(env, ProbabilityTriggerPolicy(0.5, 3, kind="oracle"), cfg, 20,
+                                       seed=0, stream=STREAM_FC_VAL))
+    assert trig["collision_free_rate"] >= zero["collision_free_rate"]
+    assert trig["mean_fuel_used_per_agent"] < 5.0

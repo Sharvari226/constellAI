@@ -14,8 +14,9 @@ import numpy as np
 import torch
 
 from constellai.evaluation.heuristic import ThresholdHeuristicPolicy
+from constellai.evaluation.triggers import DistanceTriggerPolicy, ProbabilityTriggerPolicy
 from constellai.evaluation.scaled_env import POLICY_ACTION_LIMIT, ScaledMultiAgentEnv
-from constellai.evaluation.scenarios import STREAM_EVAL, warning_config
+from constellai.evaluation.scenarios import STREAM_EVAL, STREAM_FC_VAL, warning_config
 from constellai.evaluation.trials import ConstantBurnPolicy, ZeroPolicy, run_trials, summarize_trials
 from constellai.forecasting.events import AnalyticForecaster
 from constellai.models.marl.checkpoint import build_networks
@@ -70,10 +71,16 @@ def main():
     p.add_argument("--sigma-p", type=float, default=None, help="default: the checkpoint's own value")
     p.add_argument("--noise-seed", type=int, default=12345)
     p.add_argument("--final", action="store_true", help="use the final test stream (2)")
+    p.add_argument("--val", action="store_true", help="use the validation stream (4), for choosing thresholds")
+    p.add_argument("--distance-trigger", type=float, nargs="*", default=[], help="A0: current-distance triggers (x collision radius)")
+    p.add_argument("--prob-trigger", type=float, nargs="*", default=[], help="forecast-probability triggers p*")
+    p.add_argument("--prob-horizon", type=int, default=3, help="horizon index watched by --prob-trigger (3 = 600 s)")
+    p.add_argument("--forecast-kind", choices=["analytic", "oracle"], default="analytic")
     p.add_argument("--out-dir", required=True)
     args = p.parse_args()
+    assert not (args.final and args.val), "choose one stream"
 
-    stream = STREAM_EVAL if args.final else PILOT_STREAM
+    stream = STREAM_EVAL if args.final else (STREAM_FC_VAL if args.val else PILOT_STREAM)
     cfg = warning_config(args.preset, n_agents=args.n_agents)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -91,8 +98,15 @@ def main():
     for tau in args.heuristic_tau:
         hb = dict(sigma_p=args.sigma_p if args.sigma_p is not None else 25.0, forecast="none", mission="nominal")
         jobs.append((f"heuristic_tau{tau:g}", ThresholdHeuristicPolicy(tau, cfg.collision_radius_m), hb, None))
+    for d in args.distance_trigger:
+        jobs.append((f"dist_D{d:g}", DistanceTriggerPolicy(d, cfg.collision_radius_m),
+                     dict(sigma_p=args.sigma_p if args.sigma_p is not None else 25.0, forecast="none", mission="nominal"), None))
+    for pstar in args.prob_trigger:
+        jobs.append((f"prob_{args.forecast_kind}_p{pstar:g}_h{args.prob_horizon}",
+                     ProbabilityTriggerPolicy(pstar, args.prob_horizon, kind=args.forecast_kind),
+                     dict(sigma_p=args.sigma_p if args.sigma_p is not None else 25.0, forecast=args.forecast_kind, mission="nominal"), None))
 
-    print(f"stream {stream} ({'FINAL TEST' if args.final else 'pilot'}), preset {args.preset}, "
+    print(f"stream {stream} ({'FINAL TEST' if args.final else ('validation' if args.val else 'pilot')}), preset {args.preset}, "
           f"{args.trials} trials, noise seed {args.noise_seed}")
     print(f"{'policy':<28}{'collision-free [95% CI]':>26}{'min sep m':>11}{'dv/agent':>10}{'saturation':>11}")
     for name, policy, env_kw, obs_dim in jobs:
