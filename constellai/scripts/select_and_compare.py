@@ -14,7 +14,7 @@ import numpy as np
 
 from constellai.evaluation.stats import wilson_interval
 
-FAMILIES = [("A0", "dist_D"), ("E", "heuristic_tau"), ("F", "prob_analytic"), ("B", "prob_oracle")]
+FAMILIES = [("A0", "dist_D"), ("E", "heuristic_tau"), ("E_hcw", "hcw_tau"), ("F", "prob_analytic"), ("B", "prob_oracle")]
 VAL, PILOT = 4, 6
 
 
@@ -77,7 +77,7 @@ def main():
             chosen[fam] = (name, pf, pdv)
             print(f"{fam:<4}{name:<26}{vf.mean():9.3f}{vd.mean():8.3f}   {pf.mean():.3f} [{lo:.3f},{hi:.3f}]   {m:8.3f} [{ci[0]:.3f},{ci[1]:.3f}]")
         print("  paired differences on the pilot stream (first minus second):")
-        for x, y in (("A0", "E"), ("E", "F"), ("F", "B")):
+        for x, y in (("A0", "E"), ("E", "E_hcw"), ("E_hcw", "F"), ("E", "F"), ("F", "B")):
             if x in chosen and y in chosen:
                 dm, dci = boot(chosen[x][2], chosen[y][2], rng, args.boot)
                 fm, fci = boot(chosen[x][1], chosen[y][1], rng, args.boot)

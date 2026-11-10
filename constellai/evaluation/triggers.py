@@ -86,3 +86,40 @@ class ProbabilityTriggerPolicy:
 
     def act(self, observations):
         return [self._action(o) for o in observations]
+
+
+class HcwMissTriggerPolicy:
+    """E-HCW: a point-estimate trigger with exact dynamics (the control for E versus F).
+
+    Like ThresholdHeuristicPolicy, but the predicted miss is the minimum separation of the
+    HCW-propagated track mean over the grid, including the current separation. The burn
+    direction is the shared straight-line rule, so only the TRIGGER differs from every other arm.
+    """
+
+    def __init__(self, tau, engine, burn_fraction=1.0, position_scale_m=1000.0, horizon_s=600.0):
+        self.tau = float(tau)
+        self.engine = engine
+        self.burn_fraction = burn_fraction
+        self.scale = position_scale_m
+        self.horizon_s = horizon_s
+        self.name = f"hcw_tau{tau:g}"
+
+    def _action(self, obs):
+        obs = np.asarray(obs, dtype=float)
+        best = None
+        for start in (SLOT0, SLOT1):
+            if obs[start] < 0.5:
+                continue
+            pos = obs[start + 1:start + 4] * self.scale
+            vel = obs[start + 4:start + 7]
+            miss = min(float(np.linalg.norm(pos)), float(self.engine.distances(np.concatenate([pos, vel])).min()))
+            if best is None or miss < best[0]:
+                best = (miss, pos, vel)
+        if best is None or best[0] >= self.tau * self.engine.rc:
+            return np.zeros(3)
+        _, pos, vel = best
+        _, m = closest_approach(pos, vel, self.horizon_s)
+        return self.burn_fraction * away_direction(m, vel)
+
+    def act(self, observations):
+        return [self._action(o) for o in observations]
