@@ -82,3 +82,24 @@ def test_oracle_trigger_runs_and_is_frugal():
                                        seed=0, stream=STREAM_FC_VAL))
     assert trig["collision_free_rate"] >= zero["collision_free_rate"]
     assert trig["mean_fuel_used_per_agent"] < 5.0
+
+
+def test_hcw_trigger_differs_from_straight_line_and_shares_direction():
+    from constellai.evaluation.scenarios import reference_mean_motion
+    from constellai.evaluation.triggers import HcwMissTriggerPolicy
+    from constellai.forecasting.events import FirstEntryEngine
+    engine = FirstEntryEngine(reference_mean_motion(), 10.0, RC, 60)
+    hcw, lin = HcwMissTriggerPolicy(1.2, engine), ThresholdHeuristicPolicy(1.2, RC)
+    rng = np.random.default_rng(0)
+    only_hcw = only_lin = both = 0
+    for _ in range(3000):
+        pos, vel = rng.normal(0, 400, 3), rng.normal(0, 0.5, 3)
+        o = obs41(slot0=(pos, vel))
+        a_h, a_l = hcw.act([o])[0], lin.act([o])[0]
+        h_on, l_on = bool(np.abs(a_h).sum() > 0), bool(np.abs(a_l).sum() > 0)
+        if h_on and l_on:
+            both += 1
+            np.testing.assert_allclose(a_h, a_l, atol=1e-12)
+        only_hcw += h_on and not l_on
+        only_lin += l_on and not h_on
+    assert only_hcw > 0 and only_lin > 0 and both > 0

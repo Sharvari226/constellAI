@@ -14,11 +14,11 @@ import numpy as np
 import torch
 
 from constellai.evaluation.heuristic import ThresholdHeuristicPolicy
-from constellai.evaluation.triggers import DistanceTriggerPolicy, ProbabilityTriggerPolicy
+from constellai.evaluation.triggers import DistanceTriggerPolicy, HcwMissTriggerPolicy, ProbabilityTriggerPolicy
 from constellai.evaluation.scaled_env import POLICY_ACTION_LIMIT, ScaledMultiAgentEnv
 from constellai.evaluation.scenarios import STREAM_EVAL, STREAM_FC_VAL, warning_config
 from constellai.evaluation.trials import ConstantBurnPolicy, ZeroPolicy, run_trials, summarize_trials
-from constellai.forecasting.events import AnalyticForecaster
+from constellai.forecasting.events import AnalyticForecaster, FirstEntryEngine
 from constellai.models.marl.checkpoint import build_networks
 from constellai.models.marl.multi_agent_environment import MultiAgentAvoidanceEnv
 from constellai.tracking.tracker import TrackedMultiAgentEnv
@@ -73,6 +73,7 @@ def main():
     p.add_argument("--final", action="store_true", help="use the final test stream (2)")
     p.add_argument("--val", action="store_true", help="use the validation stream (4), for choosing thresholds")
     p.add_argument("--distance-trigger", type=float, nargs="*", default=[], help="A0: current-distance triggers (x collision radius)")
+    p.add_argument("--hcw-tau", type=float, nargs="*", default=[], help="E-HCW: point-miss triggers with exact HCW propagation (x collision radius)")
     p.add_argument("--prob-trigger", type=float, nargs="*", default=[], help="forecast-probability triggers p*")
     p.add_argument("--prob-horizon", type=int, default=3, help="horizon index watched by --prob-trigger (3 = 600 s)")
     p.add_argument("--forecast-kind", choices=["analytic", "oracle"], default="analytic")
@@ -100,6 +101,10 @@ def main():
         jobs.append((f"heuristic_tau{tau:g}", ThresholdHeuristicPolicy(tau, cfg.collision_radius_m), hb, None))
     for d in args.distance_trigger:
         jobs.append((f"dist_D{d:g}", DistanceTriggerPolicy(d, cfg.collision_radius_m),
+                     dict(sigma_p=args.sigma_p if args.sigma_p is not None else 25.0, forecast="none", mission="nominal"), None))
+    for tau in args.hcw_tau:
+        jobs.append((f"hcw_tau{tau:g}",
+                     HcwMissTriggerPolicy(tau, FirstEntryEngine(cfg.mean_motion, cfg.dt, cfg.collision_radius_m, 60)),
                      dict(sigma_p=args.sigma_p if args.sigma_p is not None else 25.0, forecast="none", mission="nominal"), None))
     for pstar in args.prob_trigger:
         jobs.append((f"prob_{args.forecast_kind}_p{pstar:g}_h{args.prob_horizon}",
