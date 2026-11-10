@@ -16,7 +16,7 @@ import torch
 from constellai.evaluation.heuristic import ThresholdHeuristicPolicy
 from constellai.evaluation.triggers import DistanceTriggerPolicy, HcwMissTriggerPolicy, ProbabilityTriggerPolicy
 from constellai.evaluation.scaled_env import POLICY_ACTION_LIMIT, ScaledMultiAgentEnv
-from constellai.evaluation.scenarios import STREAM_EVAL, STREAM_FC_VAL, warning_config
+from constellai.evaluation.scenarios import STREAM_EVAL, STREAM_FC_VAL, STREAM_FINAL, warning_config
 from constellai.evaluation.trials import ConstantBurnPolicy, ZeroPolicy, run_trials, summarize_trials
 from constellai.forecasting.events import AnalyticForecaster, FirstEntryEngine
 from constellai.models.marl.checkpoint import build_networks
@@ -82,7 +82,7 @@ def main():
     args = p.parse_args()
     assert not (args.final and args.val), "choose one stream"
 
-    stream = STREAM_EVAL if args.final else (STREAM_FC_VAL if args.val else PILOT_STREAM)
+    stream = STREAM_FINAL if args.final else (STREAM_FC_VAL if args.val else PILOT_STREAM)
     cfg = warning_config(args.preset, n_agents=args.n_agents)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

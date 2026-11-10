@@ -30,6 +30,7 @@ STREAM_EVAL = 2
 STREAM_FC_TRAIN = 3  # forecaster training (never the policy-training scenarios)
 STREAM_FC_VAL = 4    # forecaster model selection and alarm threshold
 STREAM_CAL = 5       # forecaster calibration
+STREAM_FINAL = 7     # fresh stream for the one-time final evaluation (stream 2 was already used for reference policies)
 
 
 def reference_mean_motion(altitude_km: float = REFERENCE_ALTITUDE_KM) -> float:
