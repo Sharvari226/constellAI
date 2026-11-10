@@ -14,13 +14,14 @@ import numpy as np
 
 from constellai.evaluation.stats import wilson_interval
 
-FAMILIES = [("A0", "dist_D"), ("E", "heuristic_tau"), ("E_hcw", "hcw_tau"), ("F", "prob_analytic"), ("B", "prob_oracle")]
+FAMILIES = [("A0", "dist_D", ""), ("E", "heuristic_tau", ""), ("E_hcw", "hcw_tau", ""), ("F600", "prob_analytic", "_h3"),
+            ("F400", "prob_analytic", "_h2"), ("F200", "prob_analytic", "_h1"), ("B", "prob_oracle", "")]
 VAL, PILOT = 4, 6
 
 
 def family_of(name):
-    for fam, prefix in FAMILIES:
-        if name.startswith(prefix):
+    for fam, prefix, suffix in FAMILIES:
+        if name.startswith(prefix) and name.endswith(suffix):
             return fam
     return None
 
@@ -63,21 +64,21 @@ def main():
     rng = np.random.default_rng(0)
     for sigma in sorted({k[0] for k in data}):
         print(f"\nsigma_p = {sigma:g} m: thresholds chosen on val (stream 4): min dv s.t. collision-free >= {args.target}; reported on pilot (stream 6)")
-        print(f"{'fam':<4}{'policy':<26}{'val free':>9}{'val dv':>8}{'pilot free [95% CI]':>26}{'pilot dv [95% boot CI]':>26}")
+        print(f"{'fam':<7}{'policy':<26}{'val free':>9}{'val dv':>8}{'pilot free [95% CI]':>26}{'pilot dv [95% boot CI]':>26}")
         chosen = {}
-        for fam, _ in FAMILIES:
+        for fam, _, _ in FAMILIES:
             name = choose(data, sigma, fam, args.target)
             if name is None:
-                print(f"{fam:<4}(no threshold reaches the target on the validation stream)")
+                print(f"{fam:<7}(no threshold reaches the target on the validation stream)")
                 continue
             vf, vd = data[(sigma, VAL, name)]
             pf, pdv = data[(sigma, PILOT, name)]
             lo, hi = wilson_interval(int(pf.sum()), len(pf))
             m, ci = boot(pdv, np.zeros_like(pdv), rng, args.boot)
             chosen[fam] = (name, pf, pdv)
-            print(f"{fam:<4}{name:<26}{vf.mean():9.3f}{vd.mean():8.3f}   {pf.mean():.3f} [{lo:.3f},{hi:.3f}]   {m:8.3f} [{ci[0]:.3f},{ci[1]:.3f}]")
+            print(f"{fam:<7}{name:<26}{vf.mean():9.3f}{vd.mean():8.3f}   {pf.mean():.3f} [{lo:.3f},{hi:.3f}]   {m:8.3f} [{ci[0]:.3f},{ci[1]:.3f}]")
         print("  paired differences on the pilot stream (first minus second):")
-        for x, y in (("A0", "E"), ("E", "E_hcw"), ("E_hcw", "F"), ("E", "F"), ("F", "B")):
+        for x, y in (("A0", "E"), ("E", "E_hcw"), ("E_hcw", "F600"), ("F600", "F400"), ("F400", "F200"), ("F600", "B")):
             if x in chosen and y in chosen:
                 dm, dci = boot(chosen[x][2], chosen[y][2], rng, args.boot)
                 fm, fci = boot(chosen[x][1], chosen[y][1], rng, args.boot)

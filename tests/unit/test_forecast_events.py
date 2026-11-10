@@ -163,3 +163,24 @@ def test_forecaster_and_oracle_are_mutually_exclusive():
     with pytest.raises(AssertionError):
         TrackedMultiAgentEnv(scaled, sigma_p=25.0, process_accel_std=0.0,
                              forecaster=forecaster(n=10), oracle=forecaster(n=10))
+
+
+def test_gate_skips_only_negligible_risk():
+    gated = AnalyticForecaster(N, CFG.dt, CFG.collision_radius_m, n_samples=2000, seed=0, gate_sigmas=6.0)
+    plain = forecaster()
+    rng = np.random.default_rng(1)
+    fired = passed = 0
+    for sv in (0.01, 0.02, 0.05):  # converged-filter velocity std in m/s; position spread grows as sv * t
+        for idx in range(25):
+            for _, _, x0 in pair_states(scenario(idx)[2]):
+                a = rng.uniform(0.5, 3.0)
+                cov = np.diag([a * a] * 3 + [sv * sv] * 3)
+                mean = x0 + np.concatenate([rng.normal(0, a, 3), rng.normal(0, sv, 3)])
+                g, p = gated(mean, cov), plain(mean, cov)
+                if gated._gated(mean, cov):
+                    fired += 1
+                    assert p.max() <= 0.01 and g.max() == 0.0
+                else:
+                    passed += 1
+                    np.testing.assert_array_equal(g, p)
+    assert fired > 10 and passed > 10, (fired, passed)

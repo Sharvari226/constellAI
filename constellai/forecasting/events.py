@@ -89,10 +89,11 @@ class AnalyticForecaster:
     """
 
     def __init__(self, mean_motion, dt, collision_radius_m, horizons_s=HORIZONS_S,
-                 n_samples=2000, seed=0):
+                 n_samples=2000, seed=0, gate_sigmas=None):
         self.steps = horizon_steps(dt, horizons_s)
         self.engine = FirstEntryEngine(mean_motion, dt, collision_radius_m, self.steps[-1])
         self._z = np.random.default_rng(seed).standard_normal((n_samples, 6))
+        self.gate_sigmas = gate_sigmas
 
     def _samples(self, mean, cov):
         cov = 0.5 * (np.asarray(cov, dtype=float) + np.asarray(cov, dtype=float).T)
@@ -102,7 +103,19 @@ class AnalyticForecaster:
             chol = np.linalg.cholesky(cov + 1e-9 * np.eye(6))
         return np.asarray(mean, dtype=float) + self._z @ chol.T
 
+    def _gated(self, mean, cov):
+        """True when the track cannot reach the collision radius within the horizon: every propagated
+        mean position is more than gate_sigmas posterior standard deviations (sqrt of the position
+        covariance trace) beyond r_c. The Monte Carlo estimate is zero or below its resolution there,
+        so skipping it does not change a trigger decision for thresholds above that resolution."""
+        pows = self.engine.pos_pows
+        d = np.linalg.norm(np.einsum("ksi,i->ks", pows, np.asarray(mean, dtype=float)), axis=1)
+        tr = np.einsum("ksi,ij,ksj->k", pows, np.asarray(cov, dtype=float), pows)
+        return bool(np.all(d > self.engine.rc + self.gate_sigmas * np.sqrt(np.maximum(tr, 0.0))))
+
     def __call__(self, mean, cov):
+        if self.gate_sigmas is not None and self._gated(mean, cov):
+            return np.zeros(len(self.steps))
         first = self.engine.first_entry(self._samples(mean, cov))
         return cumulative_labels(first, self.steps).mean(axis=0)
 
