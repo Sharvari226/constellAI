@@ -25,6 +25,7 @@ FAMILIES = {
     "E3": ["--hcw-tau", "0.9", "1.0", "1.05", "1.1", "1.2", "1.5", "2"],
     "FH2": ["--prob-trigger", "0.03", "0.07", "0.15", "0.3", "0.5", "--forecast-kind", "analytic", "--prob-horizon", "2"],
     "FH1": ["--prob-trigger", "0.03", "0.07", "0.15", "0.3", "0.5", "--forecast-kind", "analytic", "--prob-horizon", "1"],
+    "FC": ["--prob-trigger", "0.001", "0.003", "0.0033", "0.01", "0.011", "0.033", "0.11", "0.5", "--forecast-kind", "analytic", "--prob-horizon", "3"],
 }
 
 

@@ -103,3 +103,21 @@ def test_hcw_trigger_differs_from_straight_line_and_shares_direction():
         only_hcw += h_on and not l_on
         only_lin += l_on and not h_on
     assert only_hcw > 0 and only_lin > 0 and both > 0
+
+
+def test_monotone_miscalibration_equals_threshold_shift():
+    rng = np.random.default_rng(0)
+    sig = lambda z: 1.0 / (1.0 + np.exp(-z))
+    logit = lambda p: np.log(p / (1.0 - p))
+    for a, b in ((2.0, 0.0), (0.5, 0.0), (1.0, 1.0), (1.0, -1.0)):
+        for pstar in (0.0033, 0.03, 0.11):
+            p_eff = float(sig((logit(pstar) - b) / a))
+            for _ in range(200):
+                pos, vel = rng.normal(0, 400, 3), rng.normal(0, 0.5, 3)
+                f0, f1 = np.sort(rng.uniform(0.001, 0.999, 4)), np.sort(rng.uniform(0.001, 0.999, 4))
+                base = obs41(slot0=(pos, vel), slot1=(pos[::-1], vel[::-1]), fc0=tuple(f0), fc1=tuple(f1))
+                warped = obs41(slot0=(pos, vel), slot1=(pos[::-1], vel[::-1]),
+                               fc0=tuple(sig(a * logit(f0) + b)), fc1=tuple(sig(a * logit(f1) + b)))
+                act_w = ProbabilityTriggerPolicy(pstar, 3).act([warped])[0]
+                act_b = ProbabilityTriggerPolicy(p_eff, 3).act([base])[0]
+                np.testing.assert_allclose(act_w, act_b, atol=1e-12)
