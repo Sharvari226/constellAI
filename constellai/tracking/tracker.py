@@ -29,7 +29,7 @@ N_HORIZONS = 4
 class TrackedMultiAgentEnv:
     def __init__(self, scaled_env, sigma_p, process_accel_std, sigma_v0=1.0,
                  noise_seed=0, forecaster=None, selection_horizon_s=600.0,
-                 neighbour_thrust_known=False, oracle=None, reward_scale=1.0):
+                 neighbour_thrust_known=False, oracle=None, reward_scale=1.0, sigma_choices=None):
         self.scaled = scaled_env
         self.raw = scaled_env.env
         self.n_agents = scaled_env.n_agents
@@ -46,6 +46,7 @@ class TrackedMultiAgentEnv:
         self.neighbour_thrust_known = neighbour_thrust_known
         self.oracle = oracle
         self.reward_scale = reward_scale
+        self.sigma_choices = sigma_choices
         assert forecaster is None or oracle is None, "use either a forecaster or the oracle, not both"
         self.obs_dim = 1 + SLOT_ERR_DIM + 2 * SLOT_DIM + (2 * N_HORIZONS if (forecaster is not None or oracle is not None) else 0)
         self._episode = 0
@@ -60,17 +61,21 @@ class TrackedMultiAgentEnv:
         self._episode = idx + 1
         self.scaled.reset(initial_positions_m, initial_velocities_mps)
         rng_init = np.random.default_rng([self.noise_seed, idx, 0])
+        rng_sig = np.random.default_rng([self.noise_seed, idx, 2])
+        self._sig_pri, self._sig_nb = [], {}
         self._rng_step = np.random.default_rng([self.noise_seed, idx, 1])
         truth = self.raw.agent_state_vectors()
         n, mm, dt = self.n_agents, self.raw.mean_motion, self.dt
         self._primary, self._neighbour = [], {}
         for i in range(n):
-            f = PairFilter(mm, dt, self.sigma_p, 0.0, self.sigma_v0)  # primary: known, no process noise
+            self._sig_pri.append(self._pick(rng_sig))
+            f = PairFilter(mm, dt, self._sig_pri[i], 0.0, self.sigma_v0)  # primary: known, no process noise
             f.init(-truth[i], rng_init)
             self._primary.append(f)
             for j in range(n):
                 if j != i:
-                    g = PairFilter(mm, dt, self.sigma_p, self.process_accel_std, self.sigma_v0)
+                    self._sig_nb[(i, j)] = self._pick(rng_sig)
+                    g = PairFilter(mm, dt, self._sig_nb[(i, j)], self.process_accel_std, self.sigma_v0)
                     g.init(truth[j] - truth[i], rng_init)
                     self._neighbour[(i, j)] = g
         live = self.raw.live_mask()
@@ -94,14 +99,14 @@ class TrackedMultiAgentEnv:
             known = -u_ego  # (known threat accel) - (ego applied accel)
             fp = self._primary[i]
             fp.predict(known)
-            fp.update(-truth[i][:3] + self.sigma_p * noise_pri[i])
+            fp.update(-truth[i][:3] + self._sig_pri[i] * noise_pri[i])
             for j in range(n):
                 if j == i or not live_before[j]:
                     continue
                 g = self._neighbour[(i, j)]
                 u_nb = np.asarray(result.infos[j]["thrust_mps2"], dtype=float) if self.neighbour_thrust_known else 0.0
                 g.predict(known + u_nb)
-                g.update(truth[j][:3] - truth[i][:3] + self.sigma_p * noise_nb[i, j])
+                g.update(truth[j][:3] - truth[i][:3] + self._sig_nb[(i, j)] * noise_nb[i, j])
         obs = []
         for i in range(n):
             if live_before[i]:
@@ -117,6 +122,11 @@ class TrackedMultiAgentEnv:
         std = np.sqrt(np.diag(f.cov))
         return np.concatenate([[1.0], f.mean[:3] / POSITION_SCALE_M, f.mean[3:],
                                std[:3] / POSITION_SCALE_M, std[3:]])
+
+    def _pick(self, rng):
+        if not self.sigma_choices:
+            return self.sigma_p
+        return float(self.sigma_choices[int(rng.integers(0, len(self.sigma_choices)))])
 
     def _slot_err(self, i):
         err = self.raw.slot_errors()[i]

@@ -121,3 +121,31 @@ def test_monotone_miscalibration_equals_threshold_shift():
                 act_w = ProbabilityTriggerPolicy(pstar, 3).act([warped])[0]
                 act_b = ProbabilityTriggerPolicy(p_eff, 3).act([base])[0]
                 np.testing.assert_allclose(act_w, act_b, atol=1e-12)
+
+
+def _obs_std(pos, vel, std_pos):
+    o = obs41(slot0=(pos, vel))
+    o[SLOT0 + 7:SLOT0 + 10] = np.asarray(std_pos, dtype=float) / 1000.0
+    return o
+
+
+def test_margin_trigger_k0_matches_hcw_tau1_and_is_monotone_in_k():
+    from constellai.evaluation.scenarios import reference_mean_motion
+    from constellai.evaluation.triggers import HcwMarginTriggerPolicy, HcwMissTriggerPolicy
+    from constellai.forecasting.events import FirstEntryEngine
+    engine = FirstEntryEngine(reference_mean_motion(), 10.0, RC, 60)
+    base = HcwMissTriggerPolicy(1.0, engine)
+    pols = {k: HcwMarginTriggerPolicy(k, engine) for k in (0.0, 1.0, 2.0, 4.0)}
+    rng = np.random.default_rng(0)
+    acted = {k: 0 for k in pols}
+    for _ in range(600):
+        pos, vel = rng.normal(0, 400, 3), rng.normal(0, 0.5, 3)
+        o = _obs_std(pos, vel, rng.uniform(1.0, 30.0, 3))
+        np.testing.assert_allclose(pols[0.0].act([o])[0], base.act([o])[0], atol=1e-12)
+        prev = False
+        for k in sorted(pols):
+            on = bool(np.abs(pols[k].act([o])[0]).sum() > 0)
+            assert on or not prev, "a larger margin must trigger whenever a smaller one does"
+            prev = on
+            acted[k] += on
+    assert acted[4.0] > acted[0.0] > 0

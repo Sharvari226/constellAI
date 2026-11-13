@@ -73,6 +73,7 @@ def main():
     ap.add_argument("--boot", type=int, default=2000)
     ap.add_argument("--select-stream", type=int, default=4)
     ap.add_argument("--eval-stream", type=int, default=6)
+    ap.add_argument("--nominal", choices=["cost", "opt"], default="cost", help="cost: p* = c_b/L; opt: the tuned threshold of the undistorted forecast (regret of unnoticed miscalibration)")
     a = ap.parse_args()
     rng = np.random.default_rng(0)
     for sigma in a.sigmas:
@@ -88,9 +89,9 @@ def main():
         print(f"\nsigma_p = {sigma:g} m: {len(common)} thresholds ({common[0]:g} to {common[-1]:g}), selection stream "
               f"{a.select_stream}, evaluation stream {a.eval_stream}, n = {n}, c_b = {a.cb} m/s")
         for L in a.costs:
-            pstar = a.cb / L
             ps_s, J_s = curve(sel, L)
             popt = float(ps_s[int(np.argmin(J_s))])
+            pstar = popt if a.nominal == "opt" else a.cb / L
 
             def regrets(idx):
                 ps_e, J_e = curve(ev, L, idx)

@@ -14,7 +14,7 @@ import numpy as np
 
 from constellai.evaluation.stats import wilson_interval
 
-FAMILIES = [("A0", "dist_D", ""), ("E", "heuristic_tau", ""), ("E_hcw", "hcw_tau", ""), ("F600", "prob_analytic", "_h3"),
+FAMILIES = [("A0", "dist_D", ""), ("E", "heuristic_tau", ""), ("E_hcw", "hcw_tau", ""), ("Ehcw_k", "hcwm_k", ""), ("F600", "prob_analytic", "_h3"),
             ("F400", "prob_analytic", "_h2"), ("F200", "prob_analytic", "_h1"), ("B", "prob_oracle", "")]
 VAL, PILOT = 4, 6
 
@@ -78,7 +78,7 @@ def main():
             chosen[fam] = (name, pf, pdv)
             print(f"{fam:<7}{name:<26}{vf.mean():9.3f}{vd.mean():8.3f}   {pf.mean():.3f} [{lo:.3f},{hi:.3f}]   {m:8.3f} [{ci[0]:.3f},{ci[1]:.3f}]")
         print("  paired differences on the pilot stream (first minus second):")
-        for x, y in (("A0", "E"), ("E", "E_hcw"), ("E_hcw", "F600"), ("F600", "F400"), ("F400", "F200"), ("F600", "B")):
+        for x, y in (("A0", "E"), ("E", "E_hcw"), ("E_hcw", "Ehcw_k"), ("Ehcw_k", "F600"), ("E_hcw", "F600"), ("F600", "F400"), ("F400", "F200"), ("F600", "B")):
             if x in chosen and y in chosen:
                 dm, dci = boot(chosen[x][2], chosen[y][2], rng, args.boot)
                 fm, fci = boot(chosen[x][1], chosen[y][1], rng, args.boot)
