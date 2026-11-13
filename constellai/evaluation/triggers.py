@@ -123,3 +123,43 @@ class HcwMissTriggerPolicy:
 
     def act(self, observations):
         return [self._action(o) for o in observations]
+
+
+class HcwMarginTriggerPolicy:
+    """k-sigma margin rule: the uncertainty-aware point-estimate baseline.
+
+    Trigger iff min(current separation, minimum HCW-propagated separation of the track mean over the
+    grid) < r_c + k * sigma_eff, with sigma_eff the RMS of the three position standard deviations in
+    the observation. The burn direction is the shared straight-line rule, so only the TRIGGER differs.
+    """
+
+    def __init__(self, k, engine, burn_fraction=1.0, position_scale_m=1000.0, horizon_s=600.0):
+        self.k = float(k)
+        self.engine = engine
+        self.burn_fraction = burn_fraction
+        self.scale = position_scale_m
+        self.horizon_s = horizon_s
+        self.name = f"hcwm_k{k:g}"
+
+    def _action(self, obs):
+        obs = np.asarray(obs, dtype=float)
+        best = None
+        for start in (SLOT0, SLOT1):
+            if obs[start] < 0.5:
+                continue
+            pos = obs[start + 1:start + 4] * self.scale
+            vel = obs[start + 4:start + 7]
+            std = obs[start + 7:start + 10] * self.scale
+            sigma_eff = float(np.sqrt(np.mean(std ** 2)))
+            miss = min(float(np.linalg.norm(pos)), float(self.engine.distances(np.concatenate([pos, vel])).min()))
+            slack = miss - self.engine.rc - self.k * sigma_eff
+            if best is None or slack < best[0]:
+                best = (slack, pos, vel)
+        if best is None or best[0] >= 0.0:
+            return np.zeros(3)
+        _, pos, vel = best
+        _, m = closest_approach(pos, vel, self.horizon_s)
+        return self.burn_fraction * away_direction(m, vel)
+
+    def act(self, observations):
+        return [self._action(o) for o in observations]

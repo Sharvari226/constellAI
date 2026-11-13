@@ -14,7 +14,7 @@ import numpy as np
 import torch
 
 from constellai.evaluation.heuristic import ThresholdHeuristicPolicy
-from constellai.evaluation.triggers import DistanceTriggerPolicy, HcwMissTriggerPolicy, ProbabilityTriggerPolicy
+from constellai.evaluation.triggers import DistanceTriggerPolicy, HcwMarginTriggerPolicy, HcwMissTriggerPolicy, ProbabilityTriggerPolicy
 from constellai.evaluation.scaled_env import POLICY_ACTION_LIMIT, ScaledMultiAgentEnv
 from constellai.evaluation.scenarios import STREAM_EVAL, STREAM_FC_VAL, STREAM_FINAL, warning_config
 from constellai.evaluation.trials import ConstantBurnPolicy, ZeroPolicy, run_trials, summarize_trials
@@ -37,7 +37,7 @@ class MeanActionPolicy:
                     for o in observations]
 
 
-def make_env(cfg, sigma_p, forecast, mission, noise_seed, mc_samples=500, fuel_weight=0.1, mc_gate=None):
+def make_env(cfg, sigma_p, forecast, mission, noise_seed, mc_samples=500, fuel_weight=0.1, mc_gate=None, sigma_choices=None):
     raw = MultiAgentAvoidanceEnv(n_agents=cfg.n_agents, mean_motion=cfg.mean_motion, dt=cfg.dt,
                                  collision_radius_m=cfg.collision_radius_m,
                                  max_thrust_mps2=cfg.max_thrust_mps2, max_steps=cfg.max_steps)
@@ -47,7 +47,7 @@ def make_env(cfg, sigma_p, forecast, mission, noise_seed, mc_samples=500, fuel_w
         if forecast == "analytic" else None
     oracle = AnalyticForecaster(cfg.mean_motion, cfg.dt, cfg.collision_radius_m, n_samples=1) if forecast == "oracle" else None
     return TrackedMultiAgentEnv(scaled, sigma_p=sigma_p, process_accel_std=0.0, noise_seed=noise_seed,
-                                neighbour_thrust_known=True, forecaster=fc, oracle=oracle)
+                                neighbour_thrust_known=True, forecaster=fc, oracle=oracle, sigma_choices=sigma_choices)
 
 
 def load_actor(path):
@@ -74,6 +74,8 @@ def main():
     p.add_argument("--val", action="store_true", help="use the validation stream (4), for choosing thresholds")
     p.add_argument("--distance-trigger", type=float, nargs="*", default=[], help="A0: current-distance triggers (x collision radius)")
     p.add_argument("--hcw-tau", type=float, nargs="*", default=[], help="E-HCW: point-miss triggers with exact HCW propagation (x collision radius)")
+    p.add_argument("--hcw-margin-k", type=float, nargs="*", default=[], help="k-sigma margin triggers")
+    p.add_argument("--sigma-choices", type=float, nargs="*", default=[], help="heterogeneous track quality: per-pair sigma_p drawn from these values")
     p.add_argument("--prob-trigger", type=float, nargs="*", default=[], help="forecast-probability triggers p*")
     p.add_argument("--prob-horizon", type=int, default=3, help="horizon index watched by --prob-trigger (3 = 600 s)")
     p.add_argument("--forecast-kind", choices=["analytic", "oracle"], default="analytic")
@@ -107,6 +109,10 @@ def main():
         jobs.append((f"hcw_tau{tau:g}",
                      HcwMissTriggerPolicy(tau, FirstEntryEngine(cfg.mean_motion, cfg.dt, cfg.collision_radius_m, 60)),
                      dict(sigma_p=args.sigma_p if args.sigma_p is not None else 25.0, forecast="none", mission="nominal"), None))
+    for k in args.hcw_margin_k:
+        jobs.append((f"hcwm_k{k:g}",
+                     HcwMarginTriggerPolicy(k, FirstEntryEngine(cfg.mean_motion, cfg.dt, cfg.collision_radius_m, 60)),
+                     dict(sigma_p=args.sigma_p if args.sigma_p is not None else 25.0, forecast="none", mission="nominal"), None))
     for pstar in args.prob_trigger:
         jobs.append((f"prob_{args.forecast_kind}_p{pstar:g}_h{args.prob_horizon}",
                      ProbabilityTriggerPolicy(pstar, args.prob_horizon, kind=args.forecast_kind),
@@ -116,7 +122,7 @@ def main():
           f"{args.trials} trials, noise seed {args.noise_seed}")
     print(f"{'policy':<28}{'collision-free [95% CI]':>26}{'min sep m':>11}{'dv/agent':>10}{'saturation':>11}")
     for name, policy, env_kw, obs_dim in jobs:
-        env = make_env(cfg, noise_seed=args.noise_seed, mc_gate=args.mc_gate or None, **env_kw)
+        env = make_env(cfg, noise_seed=args.noise_seed, mc_gate=args.mc_gate or None, sigma_choices=args.sigma_choices or None, **env_kw)
         if obs_dim is not None:
             assert env.obs_dim == obs_dim, f"{name}: env obs {env.obs_dim} != checkpoint actor {obs_dim}"
         trials = run_trials(env, policy, cfg, args.trials, seed=0, stream=stream)

@@ -154,3 +154,23 @@ def test_reward_scale_scales_rewards_only():
     np.testing.assert_allclose(np.array(rb.mission_rewards), 0.1 * np.array(ra.mission_rewards), rtol=1e-12)
     assert rb.safety_costs == ra.safety_costs
     np.testing.assert_array_equal(np.concatenate(oa), np.concatenate(ob))
+
+
+def test_heterogeneous_sigma_is_deterministic_mixed_and_off_by_default():
+    def mk(choices):
+        raw = MultiAgentAvoidanceEnv(n_agents=3, mean_motion=N)
+        scaled = ScaledMultiAgentEnv(raw, 3, raw.max_thrust_mps2, raw.dt)
+        return TrackedMultiAgentEnv(scaled, sigma_p=25.0, process_accel_std=0.0, noise_seed=0,
+                                    neighbour_thrust_known=True, sigma_choices=choices)
+    pos, vel = far_start(3)
+    seen = set()
+    for ep in range(8):
+        a, b = mk((5.0, 50.0)), mk((5.0, 50.0))
+        a.reset(pos, vel, episode_index=ep)
+        b.reset(pos, vel, episode_index=ep)
+        assert a._sig_pri == b._sig_pri and a._sig_nb == b._sig_nb
+        seen |= set(a._sig_pri) | set(a._sig_nb.values())
+    assert seen == {5.0, 50.0}
+    plain = mk(None)
+    plain.reset(pos, vel, episode_index=0)
+    assert plain._sig_pri == [25.0, 25.0, 25.0] and set(plain._sig_nb.values()) == {25.0}

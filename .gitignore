@@ -13,3 +13,6 @@ __pycache__/
 dist/
 build/
 outputs/m4_scaled/*.pt
+
+# raw external data (not redistributed)
+data/

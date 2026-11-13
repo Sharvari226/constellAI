@@ -26,6 +26,7 @@ FAMILIES = {
     "FH2": ["--prob-trigger", "0.03", "0.07", "0.15", "0.3", "0.5", "--forecast-kind", "analytic", "--prob-horizon", "2"],
     "FH1": ["--prob-trigger", "0.03", "0.07", "0.15", "0.3", "0.5", "--forecast-kind", "analytic", "--prob-horizon", "1"],
     "FC": ["--prob-trigger", "0.001", "0.003", "0.0033", "0.01", "0.011", "0.033", "0.11", "0.5", "--forecast-kind", "analytic", "--prob-horizon", "3"],
+    "HM": ["--hcw-margin-k", "0", "0.5", "1", "1.5", "2", "3", "4"],
 }
 
 
@@ -40,6 +41,8 @@ def job(spec, a):
         cmd.append("--val")
     if a.mc_gate:
         cmd += ["--mc-gate", str(a.mc_gate)]
+    if a.sigma_choices:
+        cmd += ["--sigma-choices"] + [str(s) for s in a.sigma_choices]
     with open(d / "run.log", "w") as f:
         rc = subprocess.run(cmd, cwd=ROOT, env=ENV, stdout=f, stderr=subprocess.STDOUT).returncode
     if rc == 0:
@@ -70,6 +73,7 @@ def main():
     p.add_argument("--preset", choices=["short", "long"], default="short")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--mc-gate", type=float, default=0.0, help="sigma gate for the analytic forecaster (0 = off); same decisions, faster")
+    p.add_argument("--sigma-choices", nargs="*", type=float, default=[], help="heterogeneous track quality: per-pair sigma_p drawn from these values")
     p.add_argument("--out-root", required=True)
     p.add_argument("--report-only", action="store_true")
     a = p.parse_args()
