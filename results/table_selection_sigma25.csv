@@ -1,0 +1,9 @@
+family,policy,val_free,val_dv,val_n,pilot_free,pilot_free_lo,pilot_free_hi,pilot_dv,pilot_dv_lo,pilot_dv_hi,pilot_n
+A0,dist_D4,1.0,1.14,100,1.0,0.963,1.0,1.124,1.07,1.181,100
+E,heuristic_tau1.2,0.98,0.199,100,0.97,0.915,0.99,0.234,0.202,0.267,100
+E_hcw,hcw_tau1.5,1.0,0.272,100,0.98,0.93,0.994,0.28,0.249,0.311,100
+Ehcw_k,hcwm_k1,0.99,0.22,100,1.0,0.963,1.0,0.248,0.218,0.28,100
+F600,prob_analytic_p0.15_h3,0.98,0.171,100,1.0,0.963,1.0,0.18,0.152,0.208,100
+F400,"(none reaches target on stream 4, or run incomplete)",,,,,,,,,,
+F200,"(none reaches target on stream 4, or run incomplete)",,,,,,,,,,
+B,prob_oracle_p0.5_h3,1.0,0.047,100,1.0,0.963,1.0,0.053,0.038,0.069,100
