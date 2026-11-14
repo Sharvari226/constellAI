@@ -23,7 +23,7 @@ Status tags: **done** = implemented and exercised by tests or recorded runs; **p
 | Component | Status | Evidence |
 |---|---|---|
 | M1 orbital mechanics (TLE parsing, SGP4 wrapper, HCW) | done | 5 Vallado reference-state tests (`tests/physics_validation`), plus unit tests |
-| M2 sparse graph and false-negative gate | done | 0 misses out of 7 baseline-flagged conjunctions over 5 seeds on one tight synthetic shell (`run_false_negative_gate.py`, run in the audit); real-catalog run pending |
+| M2 sparse graph and false-negative gate | done | 0 misses out of 7 baseline-flagged conjunctions over 5 seeds on one tight synthetic shell (`run_false_negative_gate.py`, run in the audit); no run on a real catalog found in the repository |
 | Tracking (Kalman filter, tracked environment) | done | 19 tests; NEES recorded (§8.1) |
 | Event labels and analytic forecaster | done | 12 tests; Brier skill recorded (§8.2) |
 | Trigger ladder, evaluation harness | done | tests plus recorded runs |
@@ -43,11 +43,13 @@ Status tags: **done** = implemented and exercised by tests or recorded runs; **p
 
 3 agents; dt = 10 s; collision radius 50 m; max thrust 0.01 m/s²; up to 200 steps; 15% of agents on a zero-thrust collision course (miss ≤ 0.8·50 m), others pass at 1.5–4 collision radii; approach speed 0.3–1.0 m/s; warning time to closest approach: preset `short` = 150–600 s (main), `long` = 500–1500 s (`warning_config`). Δv is `Σ‖thrust‖·dt` in m/s, per agent, averaged over all agents including unthreatened ones.
 
+Carried over from the 10 Nov README (not re-derived in the audit): linear HCW motion in the LVLH frame about a circular reference orbit at 500 km (WGS-72 constants); the primary threat is a static object at the frame origin, treated as a pseudo-threat with relative state −x_ego; the agents share one policy; collision means separation < r_c on the step grid (strict inequality), a **proxy sphere, not a hard-body radius**. Fuel-scale sanity check: a 50 m lateral shift needs Δv ≈ 2d/T ≈ 0.2–0.7 m/s per threatened agent (straight-line, ignoring HCW coupling); with 15% of agents threatened, the oracle's 0.05 m/s per agent is about 0.3 m/s per threatened agent, consistent with that estimate.
+
 ### 3.2 Tracking and forecasting
 
 - `tracking/kalman.py`: `hcw_transition`, `PairFilter` (one filter per ego–threat pair, position-only measurements, isotropic σ_p).
 - `tracking/tracker.py`: `TrackedMultiAgentEnv` replaces exact-state observations with filtered tracks. The main experiments **assume cooperative thrust broadcast** between agents (§8.1).
-- `forecasting/events.py`: `FirstEntryEngine` and `cumulative_labels` (ground-truth events), `AnalyticForecaster` (samples the filter posterior N(μ, P), propagates with HCW, reports first-passage frequencies with common random numbers; optional σ-gate). Horizons `HORIZONS_S = (100, 200, 400, 600)` s; horizon index 3 = 600 s, 2 = 400 s, 1 = 200 s.
+- `forecasting/events.py`: `FirstEntryEngine` and `cumulative_labels` (ground-truth events), `AnalyticForecaster` (samples the filter posterior N(μ, P), propagates with HCW, reports first-passage frequencies with common random numbers; optional σ-gate). **Event definition:** `E_H` = the ego–threat separation falls below r_c at some step within H seconds with both bodies at zero thrust from the forecast time. It is *risk if no action is taken*, not the probability of collision after the planner maneuvers; events are nested, so forecasts are monotone in H by construction. Horizons `HORIZONS_S = (100, 200, 400, 600)` s; horizon index 3 = 600 s, 2 = 400 s, 1 = 200 s.
 - **Heterogeneous track quality:** `--sigma-choices 5 50` draws per-pair σ_p from {5, 50} m. In outputs this mixture is labelled `sigma_p = 25`.
 
 ### 3.3 Trigger ladder (`evaluation/triggers.py`, `evaluation/heuristic.py`)
@@ -142,6 +144,11 @@ python constellai/scripts/freeze_final.py --root outputs/ladder_het --trials 300
 python constellai/scripts/report_final.py
 python constellai/scripts/make_final_figure.py
 
+# diagnostics behind §8.1, §8.2 and §8.10 (commands from the 10 Nov README; not rerun in the audit)
+python constellai/scripts/check_track_consistency.py --coop --accel-std 0.0
+python constellai/scripts/check_forecast_calibration.py
+python constellai/scripts/reference_baselines.py
+
 # calibration-regret analysis
 python constellai/scripts/analyze_calibration_regret.py --root outputs/ladder_het --sigmas 25 --nominal cost
 python constellai/scripts/analyze_calibration_regret.py --root outputs/ladder_het --sigmas 25 --nominal opt
@@ -169,21 +176,65 @@ All Δv in m/s per agent. Sources: `results/` (tracked) and outputs that are not
 
 ### 8.1 Tracking validity (NEES, target 6; 30 episodes, short preset, stream 4; recorded 10 Nov, not rerun)
 
-Without thrust broadcast and with all agents on a constant burn, the neighbour-pair NEES was 35.6 / 75.6 / 101.3 (σ_p = 5 / 25 / 50); with broadcast it was 5.69–5.86. Primary pair 5.95–6.09 throughout.
+| Configuration | Primary pair | Neighbour pair |
+|---|---|---|
+| neighbour thrust **not** broadcast, zero thrust | 5.95–6.09 | 3.34 / 3.49 / 3.60 (σ_p = 5 / 25 / 50) |
+| not broadcast, random thrust | same | 6.06 / 6.03 / 6.00 |
+| not broadcast, **constant burn** | same | **35.6 / 75.6 / 101.3** |
+| **thrust broadcast**, all three policies | 5.95–6.09 | **5.69–5.86** |
+
+The non-cooperative filter is biased when every agent burns the same thrust and cannot be repaired by tuning process noise, so the main experiment **assumes cooperative thrust broadcast** and must say so. The filter shares the simulator's dynamics, so consistency holds by construction; the noise-mismatch experiment (cut) is what would test robustness.
 
 ### 8.2 Analytic forecast skill (stream 4, 20 episodes; recorded 10 Nov, not rerun)
 
 Brier skill vs base rate at H = 100 / 200 / 400 / 600 s: σ_p = 5 m 0.996 / 0.970 / 0.896 / 0.790; 25 m 0.844 / 0.733 / 0.538 / 0.440; 50 m 0.584 / 0.483 / 0.319 / 0.257. ECE ≤ 0.015; 20 episodes make the calibration reading suggestive only.
 
-### 8.3 Homogeneous ladder (n = 100, pilot level; `outputs/ladder1`, raw files not tracked; recorded 10 Nov)
+### 8.3 Homogeneous ladder (σ_p ∈ {5, 25, 50} m, short warning, n = 100; `outputs/ladder1`, raw files not tracked; recorded 10 Nov)
 
-| σ_p | A0 − E (Δv) | E − E_hcw | E_hcw − F | F − B |
+Δv in m/s per agent; "val" = stream 4 (threshold chosen), "dev" = stream 6 (reported).
+
+**σ_p = 5 m**
+
+| Arm | Chosen | val free / Δv | dev collision-free | dev Δv |
 |---|---|---|---|---|
-| 5 m | +0.336 [0.276, 0.395] | +0.028 [0.014, 0.043] | +0.023 [0.015, 0.032] | +0.012 [0.003, 0.021] |
-| 25 m | +0.398 [0.333, 0.462] | +0.024 [0.006, 0.043] | +0.099 [0.078, 0.121] | +0.056 [0.033, 0.077] |
-| 50 m | +0.220 [0.161, 0.279] | +0.021 [−0.013, 0.055] | −0.017 [−0.049, 0.015] | +0.373 [0.337, 0.410] |
+| A0 | D = 2 | 0.980 / 0.469 | 0.990 [0.946, 0.998] | 0.445 [0.380, 0.513] |
+| E | τ = 1.05 | 1.000 / 0.119 | 1.000 [0.963, 1.000] | 0.110 [0.092, 0.129] |
+| E_hcw | τ = 1.0 | 1.000 / 0.091 | 0.990 [0.946, 0.998] | 0.082 [0.068, 0.095] |
+| F | p* = 0.4 | 1.000 / 0.060 | 1.000 [0.963, 1.000] | 0.058 [0.045, 0.073] |
+| B | oracle | 1.000 / 0.046 | 1.000 [0.963, 1.000] | 0.047 [0.033, 0.061] |
 
-At 25 m F was 3 points less safe than E_hcw on stream 6 (0.94 vs 0.97), so that comparison is not matched.
+**σ_p = 25 m**
+
+| Arm | Chosen | val free / Δv | dev collision-free | dev Δv |
+|---|---|---|---|---|
+| A0 | D = 2.5 | 1.000 / 0.629 | 1.000 [0.963, 1.000] | 0.633 [0.559, 0.708] |
+| E | τ = 1.2 | 0.990 / 0.246 | 0.970 [0.915, 0.990] | 0.235 [0.204, 0.267] |
+| E_hcw | τ = 1.2 | 0.990 / 0.215 | 0.970 [0.915, 0.990] | 0.211 [0.184, 0.238] |
+| F | p* = 0.3 | 0.990 / 0.107 | **0.940** [0.875, 0.972] | 0.112 [0.091, 0.133] |
+| B | oracle | 1.000 / 0.049 | 1.000 [0.963, 1.000] | 0.056 [0.037, 0.080] |
+
+**σ_p = 50 m**
+
+| Arm | Chosen | val free / Δv | dev collision-free | dev Δv |
+|---|---|---|---|---|
+| A0 | D = 2.5 | 0.980 / 0.623 | 0.990 [0.946, 0.998] | 0.647 [0.575, 0.721] |
+| E | τ = 1.5 | 0.980 / 0.363 | 0.950 [0.888, 0.978] | 0.427 [0.383, 0.473] |
+| E_hcw | τ = 1.5 | 0.980 / 0.368 | 0.980 [0.930, 0.994] | 0.406 [0.362, 0.453] |
+| F | p* = 0.07 | 0.980 / 0.395 | 0.990 [0.946, 0.998] | 0.423 [0.381, 0.465] |
+| B | oracle | 1.000 / 0.053 | 1.000 [0.963, 1.000] | 0.051 [0.037, 0.065] |
+
+Paired differences on the development stream (first minus second; positive Δv = first costs more; negative safety = first is less safe):
+
+| σ_p | A0 − E | E − E_hcw | E_hcw − F | F − B |
+|---|---|---|---|---|
+| 5 m, Δv | +0.336 [0.276, 0.395] | +0.028 [0.014, 0.043] | +0.023 [0.015, 0.032] | +0.012 [0.003, 0.021] |
+| 5 m, safety | −0.010 [−0.030, 0.000] | +0.010 [0.000, 0.030] | −0.010 [−0.030, 0.000] | 0.000 |
+| 25 m, Δv | +0.398 [0.333, 0.462] | +0.024 [0.006, 0.043] | +0.099 [0.078, 0.121] | +0.056 [0.033, 0.077] |
+| 25 m, safety | +0.030 [0.000, 0.070] | 0.000 | +0.030 [−0.010, 0.080] | −0.060 [−0.110, −0.020] |
+| 50 m, Δv | +0.220 [0.161, 0.279] | +0.021 [−0.013, 0.055] | −0.017 [−0.049, 0.015] | +0.373 [0.337, 0.410] |
+| 50 m, safety | +0.040 [0.010, 0.080] | −0.030 [−0.070, 0.000] | −0.010 [−0.030, 0.000] | −0.010 [−0.030, 0.000] |
+
+Reading: (1) extrapolating the track is worth a lot: A0 costs about 4× E at σ_p = 5 m, 2.7× at 25 m and 1.5× at 50 m (a coarser A0 grid had inflated this to "3–10×"). (2) Correct dynamics save 0.02–0.03 m/s, i.e. 25%, 10% and 5% of E's cost at 5 / 25 / 50 m; the interval excludes 0 at 5 and 25 m. (3) F vs. a point forecast with correct dynamics: cheaper at 5 m (28% of E_hcw's cost), no demonstrated difference at 50 m, and at 25 m F is 3 points less safe on the development stream (0.94 vs 0.97), so the comparison is **not matched**. (4) F − B is the value of perfect state knowledge, not forecasting headroom; it grows with noise (0.012 → 0.056 → 0.373) because tracking error limits any track-conditioned rule. (5) Selection noise is visible: thresholds chosen on 100 validation trials regress on the development stream (F at 25 m: 0.99 → 0.94; E at 50 m: 0.98 → 0.95).
 
 ### 8.4 Heterogeneous mixture {5, 50} m
 
@@ -217,9 +268,19 @@ Against the pre-stated predictions: fixed-τ loses to margin (supported at match
 
 With p* = c_b/L (c_b = 0.33 m/s, an estimate): L = 3 (p* = 0.11, tuned optimum 0.2) regret of the nominally calibrated threshold +0.058 [0.023, 0.088]; L = 10 (p* = 0.033, tuned optimum 0.1) +0.221 [0.196, 0.250]. Rows marked "clamped" (all L ≥ 30 under the cost nominal) are lower bounds at the grid edge, and the L ≥ 30 rows under the tuned nominal have intervals up to +2.2; neither is interpretable. Global logit-affine distortions only.
 
-### 8.6 RL arm (recorded 10 Nov; `outputs/pilot1`, not tracked)
+### 8.6 RL arm (secondary; negative result; recorded 10 Nov; `outputs/pilot1`, not tracked)
 
-Short preset, σ_p = 25, 3 seeds × 300 episodes, n = 100: RL reactive 0.913 ± 0.038 collision-free at 19.75 ± 3.24 m/s; RL + oracle forecast 0.910 ± 0.044 at 23.68 ± 2.75 m/s; best rules 0.97–0.99 at 0.1–0.4 m/s (roughly 50–180× less fuel). Mission rewards scaled by 0.05 raised reward-critic explained variance from about 0 to 0.85 (single seed, in-sample).
+Critic diagnosis (single seed, in-sample explained variance): multiplying mission rewards by 0.05 raised reward-critic explained variance from about 0.00 to 0.85 (last 10 episodes) with the same code; ruled out as causes were observability of the slot error, the placeholder mission term and the fuel penalty (removing it gave 0.67). Cost-critic EV is about 0.64 with tracked observations.
+
+Policy pilot (short preset, σ_p = 25 m, budget 5.7, 3 seeds × 300 episodes, n = 100, stream 6):
+
+| Policy | Collision-free (mean ± sd over seeds) | Δv / agent | Saturation |
+|---|---|---|---|
+| RL reactive | 0.913 ± 0.038 | 19.75 ± 3.24 | 0.544 |
+| RL + oracle forecast | 0.910 ± 0.044 | 23.68 ± 2.75 | 0.679 |
+| best rule (E_hcw / F, §8.3) | 0.97–0.99 | 0.1–0.4 | n/a |
+
+Paired RL reactive − oracle: collision-free +0.003 [−0.073, +0.080]; Δv −3.9 [−7.9, 0.0]. The learned planner burns roughly **50–180×** the fuel of the rules (19.75 / 0.4 ≈ 50; 19.75 / 0.11 ≈ 180; the 10 Nov README's "about 50×" is the conservative end), and the oracle forecast gave it no benefit at this scale. The PID constraint is met (observed discounted cost 1.5–4.6 against a budget of 5.7) but is not binding and fuel is not priced, so the policy burns continuously. In seed 0, 90% of steps have a mean action beyond the thrust limit that the environment clips; seed 1 stays mostly inside the limit and still burns about 19 m/s. To test before any RL claim: bounded actions (tanh mean), fuel as the optimised quantity with risk as the constraint, longer training.
 
 ### 8.7 ESA CDM retrospective study (`results/esa_followup.txt`, `results/regret_by_cut_signal_ratio.csv`, `results/context_by_covariance_tertile.csv`)
 
@@ -228,6 +289,62 @@ Test events/positives at the 2/3/5-day cuts: 2,167/150, 2,045/138, 1,753/106; pr
 ### 8.8 Figure and table locations
 
 `results/`: selection and paired tables (`table_*_sigma25.{csv,tex}`), stream 7 report, regret and ESA CSV/TXT. Generated by the scripts and not tracked: `outputs/figures/ladder_het/` (frontier, cost bars), `outputs/figures/final_stream7/`, `outputs/esa_study/figures/`. Tracked earlier figures: `outputs/visualizations/`, `outputs/demo/` (M1–M3 demonstrations; not re-checked in this audit).
+
+### 8.9 Hypotheses and claims register (carried over from the 10 Nov README, updated with stream 7 and ESA)
+
+| # | Hypothesis | Status |
+|---|---|---|
+| H1 | Forecast-type triggers beat a purely reactive trigger on the Δv-vs-collision frontier. | **Supported.** E beats A0 with intervals excluding 0 at every tested noise level (pilot); in the mixture on stream 7, A0 − E = +0.932 [0.899, 0.967]. |
+| H1b | Probabilistic forecasting beats a point forecast with correct dynamics. | **Mixed.** Homogeneous pilot: cheaper at σ_p = 5 m, no difference at 50 m, unmatched safety at 25 m. Mixture, stream 7: F600 cheaper than E_hcw by 0.096 [0.083, 0.108] at equal safety; one condition, thresholds from an n = 100 selection. |
+| H2 | Calibration matters for planning. | **Partly addressed.** A tuned threshold is invariant to global monotone recalibration (P2). The untuned cost-ratio threshold has positive regret (§8.5, n = 100, lower bounds at high L). ESA retrospective study: inconclusive (§8.7). |
+| H3 | A learned forecaster adds value over physics-based propagation. | **Untested.** Synthetic learned-forecaster arms were cut; on ESA data a gradient-boosting model on last-CDM features did no better than a tuned threshold on ESA's own risk. |
+| H4 | Multi-horizon information improves the trade-off. | **Untested at the frozen protocol.** F400 and F200 were not part of the frozen set. |
+
+Claims the evidence supports (pilot-level unless stated):
+
+| # | Claim | Evidence |
+|---|---|---|
+| C1 | Forecast-type triggers reach ≥ 0.97–1.00 collision-free at 0.06–0.4 m/s per agent on short-warning synthetic scenarios, where a current-distance trigger needs 0.45–0.65 m/s. | §8.3, §8.4 |
+| C2 | Extrapolating the track (E) beats a reactive trigger (A0); intervals exclude 0. | §8.3, §8.4 |
+| C3 | Exact dynamics save 0.02–0.03 m/s in the **homogeneous** setting at σ_p = 5 and 25 m; **not reproduced** in the {5, 50} mixture. | §8.3 vs §8.4 |
+| C4 | At σ_p = 5 m a probabilistic trigger is cheaper than a point trigger with exact dynamics (0.023 m/s). | §8.3 |
+| C5 | In the {5, 50} mixture on stream 7 (n = 300), F600 is cheaper than the k·σ margin by 0.059 [0.047, 0.071] at equal safety, and fixed-τ HCW loses to the margin (+0.036 [0.027, 0.046]); one condition, thresholds from 100 validation trials. | §8.4 |
+| C6 | Perfect state knowledge would cut Δv to about 0.05 m/s at every noise level; the gap to the best track-conditioned rule grows with noise. | §8.3, §8.4 |
+| C7 | The filter is consistent under cooperative thrust broadcast and inconsistent without it under correlated burns. | §8.1 |
+| C8 | The analytic forecast has positive Brier skill at all horizons and noise levels. | §8.2 |
+| C9 | The RL planner is far less fuel-efficient than the rules and did not benefit from an oracle forecast. | §8.6 |
+
+Do **not** write: that calibration improves planning or that a calibration measure predicts Δv or regret on real data (ESA inconclusive); that heterogeneity explains F's advantage (no matched control); that multi-horizon forecasting helps (not evaluated); that a learned forecaster beats physics propagation; that E beats E_hcw (E missed the safety target); that F has headroom beyond the track-conditioned rules (F − B measures tracking, not forecasting); any safety guarantee, other constellation size, multiple simultaneous threats, maneuvering threats or real-orbit result; any fuel claim from real data; any ranking of M3 models.
+
+### 8.10 Reference policies (recorded 10 Nov, stream 6, 100 episodes, γ = 0.99; not rerun in the audit)
+
+| Preset | Policy | Collision-free [95% CI] | Agent collision rate | Δv / agent | Discounted shaped cost, mean (p90) |
+|---|---|---|---|---|---|
+| short | zero thrust | 0.550 [0.452, 0.644] | 0.197 | 0 | 14.3 (23.4) |
+| short | random thrust | 0.730 [0.636, 0.807] | 0.107 | 17.5 | 11.0 (21.9) |
+| short | full burn | 0.770 [0.678, 0.842] | 0.133 | 30.8 | 11.4 (23.3) |
+| long | zero thrust | 0.550 [0.452, 0.644] | 0.197 | 0 | 9.9 (19.1) |
+| long | random thrust | 0.960 [0.902, 0.984] | 0.017 | 19.0 | 3.0 (10.4) |
+| long | full burn | 0.860 [0.779, 0.915] | 0.083 | 32.9 | 6.1 (15.1) |
+
+The short preset has headroom (a random-thrust policy is 73% collision-free at 17.5 m/s); the long preset largely does not, which is why short warning is the main experiment. Even 31 m/s of undirected thrust leaves 23% of short trials with a collision.
+
+### 8.11 M3 forecasting pilot (recorded 10 Nov; an older task and a different event)
+
+M3 predicts "separation below 300 km within 90 minutes", not the planning event. LSTM and GNN: 6 test scenarios at a 2-minute step; TGN-lite: 3 test scenarios at a 5-minute step; 3 seeds.
+
+| Model | AP (seed range) | Precision | Recall |
+|---|---|---|---|
+| LSTM | 0.756 (0.66–0.84) | 0.760 | 0.864 |
+| Static GNN | 0.183 | 0.162 | 0.773 |
+| TGN-lite (point) | 0.246 (0.18–0.31) | 0.047 | 0.711 |
+| TGN-lite (Beta head) | 0.014, ECE 0.334 | | |
+
+The effective sample is 3–6 scenarios and the comparison is unmatched, so it supports no ranking. TGN-lite does not read event timestamps, so continuous-time claims are unsupported; it is not the forecaster for the central experiment.
+
+### 8.12 Established methods vs. intended contribution
+
+HCW dynamics, Kalman filtering, PPO/MAPPO, Lagrangian constrained RL, the PID multiplier, CBF filters and TGN/LSTM/GNN risk classifiers are established. Threshold rules on miss distance and risk probability are standard operational practice in some form. The trigger ladder with a shared burn rule, the exact-dynamics control and the validation-then-frozen protocol are our experimental design. The decomposition of the value of forecasting into extrapolation, dynamics fidelity, probabilistic handling and perfect state knowledge is the intended contribution; **novelty is not established.**
 
 ## 9. Limitations and assumptions
 
@@ -240,6 +357,7 @@ Test events/positives at the 2/3/5-day cuts: 2,167/150, 2,045/138, 1,753/106; pr
 - **Straight-line, single-threat synthetic scenarios** favour straight-line rules; the burn rule is full-thrust with no hysteresis.
 - **The ESA study is retrospective;** the learned model is gradient boosting on last-CDM features, not a sequence model; the −6 label threshold is a convention.
 - **The M5 safety filter is unaudited,** the RL arm is a negative result, and the M3 pilot supports no model ranking.
+- **Known issue (from the 10 Nov README, [unverified] in the audit):** `test_mappo_learns_to_reduce_collisions` starts the agents inside the collision radius and is likely degenerate; some docstrings may still be stale. (Tracked `.pyc` files are untracked by the audit patch.)
 - **Reproducibility gaps:** raw ladder and stream 7 JSON files are not tracked; the ESA data is not redistributed; the exact original `--mc-gate` for `ladder_het` was not recorded; the audit ran on Linux/Python 3.12 while results were produced on Windows/Python 3.13 (one n = 100 policy reproduced exactly).
 
 ## 10. Future scope
@@ -248,7 +366,7 @@ Matched homogeneous-σ control; F400/F200 at the frozen protocol and n ≥ 300 s
 
 ## 11. References (as used in the project notes; **[unverified]**: not re-checked against the sources)
 
-Vallado, *Revisiting Spacetrack Report #3* (reference satellite #00005, used by `tests/physics_validation`); Markov Decision Processes for Satellite Maneuver Planning and Collision Avoidance (arXiv:2501.02667); Greco et al., robust Bayesian agent for collision avoidance manoeuvre planning (Strathclyde, 2021); ConstrainedZero (IJCAI 2024); Stooke et al., PID Lagrangian methods (ICML 2020); ESA Kelvins Collision Avoidance Challenge dataset (Zenodo) and Uriot et al., arXiv:2008.03069; decision-theory priors for the theory section (Schervish; Rothblum–Yona; Hu–Wu, FOCS 2024; Gopalan et al.; Kleinberg et al.; Zhao et al.) to be checked before citation.
+Vallado, *Revisiting Spacetrack Report #3* (reference satellite #00005, used by `tests/physics_validation`); Markov Decision Processes for Satellite Maneuver Planning and Collision Avoidance (arXiv:2501.02667); Greco et al., robust Bayesian agent for collision avoidance manoeuvre planning (Strathclyde, 2021); ConstrainedZero (IJCAI 2024); Stooke et al., PID Lagrangian methods (ICML 2020); ESA Kelvins Collision Avoidance Challenge dataset (Zenodo) and Uriot et al., arXiv:2008.03069; decision-theory priors for the theory section (Schervish; Rothblum–Yona; Hu–Wu, FOCS 2024; Gopalan et al.; Kleinberg et al.; Zhao et al.) to be checked before citation. Sources suggested by the team's reviewer (a NASA conjunction-assessment AI/ML compendium, a 2025 high-covariance conjunction-prediction paper, a 2026 belief-space planning paper) could **not** be confirmed and must not be cited until located. The related-work notes above were read at abstract level only.
 
 ## 12. Team (as recorded in the earlier README; names and final attribution to be confirmed by the team)
 
@@ -260,5 +378,12 @@ Vallado, *Revisiting Spacetrack Report #3* (reference satellite #00005, used by 
 | Mentor + Dev D | M5 (safety filter), paired |
 
 The trigger-ladder, tracking, forecaster, protocol, ESA study and final-evaluation work belongs to the project lead and is not attributed here per author **[to be filled by the team]**.
+
+## 13. Working conventions
+
+- Work on feature branches; do not push to `main` directly. Add files by explicit path; never `git add -A`.
+- Every experiment states what is tested, the controlled variables, the metrics, what would support or falsify the hypothesis, and what remains unjustified.
+- Results contradicting the hypothesis are reported as such; results from before the environment fix are never mixed into a table.
+- Status claims are re-verified against code, tests and logs before they are reused in the paper.
 
 Licence: to be added.
