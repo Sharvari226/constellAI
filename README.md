@@ -2,7 +2,7 @@
 
 **When does forecast quality reduce the fuel needed for risk-triggered satellite maneuvers, and which calibration measure predicts it?**
 
-> **Status (14 Nov 2026): research prototype, pilot-level evidence, final evaluation not yet run.**
+> **Status (14 Nov 2026): research prototype. The final evaluation (stream 7, n = 300, thresholds frozen from the n = 100 stream-4 selection) was run once; see §6.5. Everything else is pilot-level.**
 > Tags used throughout: **[V]** verified from output seen, **[A]** assumed (not seen), **[P]** pending (not run), **[X]** cut or deferred.
 > Development-protocol numbers (n = 100, thresholds chosen on a validation stream, read on a development stream) are for drafting structure and arguments, **not headline claims**. §7 lists what may and may not be written.
 
@@ -23,6 +23,9 @@ Supersedes the 10 Nov README. What changed is in §0.
 | Cut | | Scenario audit, synthetic learned-forecaster arms, noise-mismatch, RL repair, M5, scaling. Move to future work. |
 | Final stream | stream 7 | unchanged: stream 7, run once, frozen thresholds. |
 | Tests | 299 passed, 1 skipped | **308 passed, 1 skipped** [V]. |
+| Final stream 7 | not run | **Run once**, n = 300, frozen thresholds (commit `8618a56`) [V]; §6.5. |
+| n = 300 selection rerun | planned | **Abandoned** (1/18 jobs after ~9 h); thresholds come from the n = 100 selection [V]; §6.4. |
+| ESA CDM study | planned | **Run** as a retrospective study; inconclusive on calibration-vs-regret [V]; §6.6. |
 
 Resolved assumptions: Δv is in m/s (Σ‖thrust‖·dt per agent, averaged over all agents) [V from 10 Nov README §2]; `h3` is the 600 s horizon [V: "H = 600 s so far"]. Still assumed: `h1/h2` = 200/400 s and `FH1/FH2` = F200/F400.
 
@@ -223,23 +226,57 @@ F600 validation curve (stream 4, `s25_val_F` log) [V]: p* 0.02 → free 1.000, �
 
 **Limits.** n = 100, one heterogeneity condition. E and E_hcw fall below 0.98 on stream 6 (0.970, 0.980), so part of E's cost advantage over E_hcw is bought with collisions. F600 and E were selected exactly at val 0.980 (2 failures in 100). No matched homogeneous control at the same mean σ, so "heterogeneity explains F's win" is a hypothesis. E_hcw worse than E here contradicts §6.2's dynamics-fidelity saving; the grids differ, so do not claim a direction. F600 is still about 3.4× the oracle.
 
-### 6.4 n = 300 rerun [P]
+### 6.4 n = 300 selection rerun [abandoned]
 
-Launched from clean `f60a08b` into `outputs/ladder_het_n300_r2`: 18 jobs (9 families × val/pilot, includes FH2 and FH1), `--sigma-choices 5 50`, `--trials 300`, `--workers 10`, `--mc-gate` off (slower, same decisions). Fill in:
+A rerun at n = 300 (`outputs/ladder_het_n300_r2`, 18 jobs, includes FH1/FH2) was started to select thresholds on 300 validation trials. Progress on the shared 12-thread machine was too slow (1 of 18 jobs done after about 9 h), so it was stopped; an FC (low-threshold) run was also started and stopped. **No number from either run is used.** The thresholds frozen for the final evaluation come from the n = 100 stream-4 selection in §6.3, so selection is coarse. F400 and F200 were never part of the frozen source and are excluded.
 
-```
-python constellai/scripts/select_and_compare.py --root outputs/ladder_het_n300_r2 --target 0.98 --boot 2000
-```
+### 6.5 Final evaluation, stream 7 (run once) [V]
 
-Pre-stated expectations: F600 stays below margin; E_hcw still loses to margin; F400/F200 unknown. Do not interpret before the table exists.
+Thresholds frozen from §6.3 (`frozen_thresholds.json`, commit `8618a56`), then run once on 300 fresh scenarios (`freeze_final.py --execute`, `--mc-gate 6`, noise seed 12345, {5, 50} mixture, short preset). Stream 7 is spent: do not retune on it or rerun without labelling the result post hoc.
 
-### 6.5 Frozen final, stream 7 [P]
+| Arm | Policy | Val free / Δv (n = 100) | Stream 7 collision-free [95% CI] | Stream 7 Δv [95% boot CI] | Δv vs val |
+|---|---|---|---|---|---|
+| A0 | dist_D4 | 1.000 / 1.140 | 1.000 [0.987, 1.000] | 1.150 [1.116, 1.187] | +0.009 |
+| E | heuristic_tau1.2 | 0.980 / 0.199 | **0.953 [0.923, 0.972]** | 0.218 [0.201, 0.235] | +0.019 |
+| E_hcw | hcw_tau1.5 | 1.000 / 0.272 | 0.990 [0.971, 0.997] | 0.279 [0.260, 0.297] | +0.007 |
+| Ehcw_k | hcwm_k1 | 0.990 / 0.220 | 0.990 [0.971, 0.997] | 0.242 [0.224, 0.260] | +0.022 |
+| F600 | prob_analytic_p0.15_h3 | 0.980 / 0.171 | 0.990 [0.971, 0.997] | 0.183 [0.167, 0.200] | +0.012 |
+| B | prob_oracle_p0.5_h3 | 1.000 / 0.047 | 1.000 [0.987, 1.000] | 0.047 [0.040, 0.055] | 0.000 |
 
-Thresholds frozen from §6.4 stream-4 selection, committed, then one run (`evaluate_tracked.py --final`, n ≈ 300–500). Report even if collision-free falls below 0.98.
+Paired differences on stream 7 (first minus second; positive Δv = first costs more):
 
-### 6.6 ESA CDM study [P]
+| Pair | Δv | Collision-free |
+|---|---|---|
+| A0 − E | +0.932 [+0.899, +0.967] | +0.047 [+0.023, +0.070] |
+| E − E_hcw | −0.061 [−0.076, −0.046] | −0.037 [−0.060, −0.017] |
+| E_hcw − Ehcw_k | +0.036 [+0.027, +0.046] | 0.000 [0.000, 0.000] |
+| Ehcw_k − F600 | +0.059 [+0.047, +0.071] | 0.000 [−0.010, +0.010] |
+| E_hcw − F600 | +0.096 [+0.083, +0.108] | 0.000 [−0.010, +0.010] |
+| F600 − B | +0.136 [+0.122, +0.150] | −0.010 [−0.020, 0.000] |
 
-`profile_esa_cdm.py` written, not run (extract `train_data.zip` first). Plan: signals from miss distance → covariance/Mahalanobis → learned CDM-sequence forecaster; cuts at 2/3/5 days to TCA; high-risk label (assumed log10 risk > −6, **confirm in dataset text**); cost curves, ECE vs regret, context test by covariance size. Files: `test_data.csv`, `test_data_private.csv` (`true_risk`), `train_data.zip` (ESA Kelvins, Zenodo 4463683, Uriot et al. arXiv 2008.03069). No fuel claim from real data.
+Against the pre-stated predictions:
+
+| Prediction | Outcome on stream 7 |
+|---|---|
+| Fixed-τ loses to margin | **Supported at matched safety**: E_hcw − Ehcw_k = +0.036 [0.027, 0.046], collision outcomes identical (0.990 both). |
+| Margin ≈ F | **Not supported**: F600 is cheaper by 0.059 [0.047, 0.071] at equal safety (0.990 both). |
+| F ≤ margin | Supported. |
+
+Limits. (1) One heterogeneity condition; no matched homogeneous control, so "heterogeneity explains F's advantage" remains a hypothesis. (2) Thresholds were selected on 100 validation trials; bootstrap intervals hold them fixed and omit selection noise. (3) E fell below the 0.98 target (0.953 [0.923, 0.972]), so E being cheaper than E_hcw is not a matched comparison and should not be stated as E beating E_hcw. (4) F's grid has more thresholds (9) than the HCW arms (7) and E (5); the validation-to-final Δv rise is +0.012 for F against +0.022 for Ehcw_k and +0.007 for E_hcw, which gives no sign of extra winner's-curse for F (suggestive only). (5) F600 is still about 3.9 times the oracle's Δv (0.183 vs 0.047). (6) F400 and F200 were not evaluated.
+
+### 6.6 ESA CDM study (retrospective; Kelvins Collision Avoidance Challenge) [V]
+
+Data: train 13,154 events / 162,634 CDMs (2.77% final-risk > −6); test 2,167 events, 150 high-risk by `true_risk` > −6 (6.92%). The dataset text defines the target as the final CDM's risk; the −6 threshold is the competition convention [A: not in the dataset text]. Scripts: `esa_study.py`, `esa_followup.py`, `make_esa_figures.py`; outputs under `outputs/esa_study`. Cost model: a flag costs r, a missed high-risk event costs 1; **no fuel claim**. Test events/positives at the 2/3/5-day cuts: 2,167/150, 2,045/138, 1,753/106. The features come from the last CDM at or before the cut. The learned model is gradient boosting on last-CDM features (not a sequence model); fit/validation is a 70/30 split of train events.
+
+- Tuned threshold on ESA's own risk (S3) has lower regret than the tuned learned model (S4) in 8 of 9 cut × r cells (e.g. 2 d, r = 0.05: −0.0107 [−0.0152, −0.0067]); the exception is 5 d, r = 0.05 (−0.0013 [−0.0041, +0.0014]). The learned model adds nothing over the risk feature, so H3 stays untested.
+- Untuned S4 (flag iff p ≥ r) vs tuned S4 has no consistent sign (2 d, r = 0.05: −0.0091 [−0.0133, −0.0053]; 3 d, r = 0.2: +0.0049 [+0.0022, +0.0080]).
+- S3's raw ECE and untuned regret are artefacts (10^risk ≈ 0 flags nothing); ignore them.
+- Prior shift: prevalence 2.7% (train) vs 6.9% (test). S4 calibration ratio (mean p / prevalence) by chaser-covariance tertile: validation 0.83 / 0.89 / 1.08 (2 d); test raw 0.26 / 0.34 / 0.63; test prior-shift-corrected (diagnostic; uses test prevalence) 0.54 / 0.58 / 0.89 (2 d), 0.45 / 0.44 / 1.04 (3 d), 0.59 / 0.64 / 1.40 (5 d). Calibration varies with covariance size beyond the prior shift, qualitatively as in P3, but tertiles hold 7–64 positives (validation) and 26–63 (test), the ratios have no confidence intervals, and test also has covariate shift.
+- Regret per tertile does not track that gradient consistently (untuned relative regret 0.17 / 0.14 / 0.32 at 2 d corrected vs 0.24 / 0.28 / 0.27 at 3 d), so "which calibration measure predicts regret" is **inconclusive** here.
+
+### 6.6b Calibration-regret analysis (n = 100, `ladder_het`, global logit-affine distortions) [V]
+
+`analyze_calibration_regret.py`, F600 family, cost J = L·collision rate + Δv, c_b = 0.33 m/s, selection stream 4, evaluation stream 6. With nominal p* = c_b/L: at L = 3 (p* = 0.11, tuned optimum 0.2) the calibrated-forecast regret is +0.058 [0.023, 0.088] m/s; at L = 10 (p* = 0.033, tuned optimum 0.1) it is +0.221 [0.196, 0.250], so the untuned one-shot threshold sits below the tuned optimum. With the tuned optimum as nominal, unnoticed under-confidence (a = 0.5) costs +0.177 [0.134, 0.214] and risk over-estimation (b = +1) +0.106 [0.069, 0.139] at L = 3. **Rows marked "clamped" (all L ≥ 30 under the cost nominal) are lower bounds at the grid edge, and the L ≥ 30 rows under the tuned nominal have intervals reaching +2.2; do not use either.** Global monotone distortions only.
 
 ### 6.7 Forecast skill (stream 4, 20 episodes, 5,497 correlated rows)
 
@@ -290,7 +327,7 @@ RL burns roughly **50–200×** the fuel of the rules depending on which rule an
 | C2 | Track extrapolation (E) beats a reactive trigger (A0), intervals exclude 0. | §6.2, §6.3 |
 | C3 | Exact dynamics save 0.02–0.03 m/s in the **homogeneous** setting at 5 and 25 m. Not reproduced in the {5, 50} mixture. | §6.2 vs §6.3 |
 | C4 | At σ_p = 5 m a probabilistic trigger is cheaper than a point trigger with exact dynamics (0.023 m/s). | §6.2 |
-| C5 | In the {5, 50} mixture, F600 is cheaper than the k·σ margin by 0.068 [0.044, 0.092] at equal pilot safety (n = 100, one condition). Hedge; confirm at n = 300 and stream 7. | §6.3 |
+| C5 | In the {5, 50} mixture, F600 is cheaper than the k·σ margin by 0.068 [0.044, 0.092] at equal pilot safety (n = 100, one condition). Confirmed once on stream 7 (n = 300): 0.059 [0.047, 0.071] at equal safety (0.990 both); one condition, thresholds from an n = 100 selection. | §6.3, §6.5 |
 | C6 | Perfect state knowledge gives about 0.05 m/s at every noise level; the gap to track-conditioned rules grows with noise. | §6.2 |
 | C7 | Filter consistent under cooperative broadcast, inconsistent without it under correlated burns. | §6.1 |
 | C8 | Analytic forecast has positive Brier skill at all horizons. | §6.7 |
@@ -298,7 +335,7 @@ RL burns roughly **50–200×** the fuel of the rules depending on which rule an
 
 **Do not write:**
 
-- Calibration measure predicts Δv on real data (ESA study not run).
+- Calibration measure predicts Δv or regret on real data (ESA retrospective study run: inconclusive, §6.6).
 - Heterogeneity is *why* F wins (no matched control).
 - Multi-horizon forecasting helps (n = 300 pending; handoff reading only).
 - Learned forecaster beats physics propagation (not built).
@@ -330,7 +367,7 @@ Cite and check precisely: Schervish; Rothblum–Yona (2022); Hu–Wu (FOCS 2024)
 4. Cooperative-thrust assumption (§6.1).
 5. Burn rule is full-thrust, no hysteresis, straight-line direction.
 6. One heterogeneity mixture; no matched homogeneous control.
-7. Selected thresholds sit on the 0.98 boundary; bootstrap CIs understate selection noise.
+7. Selected thresholds sit on the 0.98 boundary; bootstrap CIs understate selection noise. Final thresholds were selected on 100 validation trials (the n = 300 rerun was abandoned); E fell below 0.98 on stream 7 (0.953).
 8. RL arm: unbounded actions, fuel not priced, 300 episodes, in-sample EV.
 9. M3 pilot predicts a different event ("separation below 300 km within 90 min"), 3–6 scenarios; supports no ranking.
 10. Hygiene: tracked `.pyc` files (use explicit-path `git add`); `test_mappo_learns_to_reduce_collisions` likely degenerate.
@@ -340,9 +377,9 @@ Cite and check precisely: Schervish; Rothblum–Yona (2022); Hu–Wu (FOCS 2024)
 ## 10. Roadmap
 
 - [x] Objective, env fixes, tracked observations, filter, labels, analytic forecaster, ladder, E_hcw control, horizon families, calibration–regret analysis, heterogeneity, margin policy; ladder_het (n = 100) read.
-- [ ] **n = 300 val+pilot rerun** (running) → `select_and_compare` table → freeze selection → commit.
-- [ ] **Stream 7 final**, once, frozen thresholds, n ≈ 300–500.
-- [ ] ESA profile → loader → study (signals, cuts at 2/3/5 days, ECE vs regret, covariance-size context test).
+- [x] n = 300 selection rerun: **abandoned**; thresholds frozen from the n = 100 selection and committed (`8618a56`).
+- [x] **Stream 7 final** run once at n = 300 (§6.5). Spent.
+- [x] ESA profile and retrospective study (§6.6): inconclusive on calibration vs regret.
 - [ ] LaTeX theory section with proofs (P3 example, P4 against the analysis code).
 - [ ] Figure and table scripts; README and claims-register update; full suite; commit and push (explicit paths).
 
@@ -366,7 +403,7 @@ Cite and check precisely: Schervish; Rothblum–Yona (2022); Hu–Wu (FOCS 2024)
 
 Figures: Δv–safety frontier per arm; value-decomposition bars A0 → E → E_hcw → Ehcw_k → F → B; F600 validation curve; NEES with/without broadcast; Brier skill vs horizon; ECE vs regret (ESA).
 
-**Minimum submittable state:** theory P1–P3 with proofs and P5 example; ladder results on streams 4/6 (n = 300 if finished, else n = 100 labelled pilot-level); stream 7 only if frozen and run once; limitations stated; ESA, learned forecasters and all §10 future-work items labelled as future work.
+**Minimum submittable state:** theory P1–P3 with proofs and P5 example; ladder results on streams 4/6 (n = 300 if finished, else n = 100 labelled pilot-level); stream 7 final (done, once); limitations stated; ESA, learned forecasters and all §10 future-work items labelled as future work.
 
 ---
 
