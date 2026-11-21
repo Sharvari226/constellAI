@@ -1,0 +1,9 @@
+stream 4 (validation), preset short, 100 trials, noise seed 12345
+policy                         collision-free [95% CI]  min sep m  dv/agent saturation
+hcw_tau0.9                    0.860 [0.779,0.915]       83.2     0.128      0.000
+hcw_tau1                      0.910 [0.838,0.952]       84.5     0.146      0.000
+hcw_tau1.05                   0.920 [0.850,0.959]       86.6     0.151      0.000
+hcw_tau1.1                    0.930 [0.863,0.966]       89.1     0.166      0.000
+hcw_tau1.2                    0.970 [0.915,0.990]       93.4     0.192      0.000
+hcw_tau1.5                    1.000 [0.963,1.000]      104.9     0.272      0.000
+hcw_tau2                      1.000 [0.963,1.000]      123.9     0.385      0.000

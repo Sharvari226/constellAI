@@ -1,0 +1,5 @@
+tracked constrained_mappo: seed 0, 300 episodes, preset short, mission nominal, sigma_p 25.0, forecast none, actor obs 33
+  [constrained_mappo seed 0] episode 100: trial collision rate (last 100) 0.14, 275s elapsed
+  [constrained_mappo seed 0] episode 200: trial collision rate (last 100) 0.10, 535s elapsed
+  [constrained_mappo seed 0] episode 300: trial collision rate (last 100) 0.10, 819s elapsed
+SUMMARY mission=nominal sigma_p=25.0: reward EV first10 0.46 last10 0.93 | cost EV first10 0.75 last10 0.67 | reward loss last10 median 0.7 | collision episodes 34 | lambda end 3.001 | observed cost last10 median 3.38

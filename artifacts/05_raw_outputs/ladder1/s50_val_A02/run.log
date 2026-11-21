@@ -1,0 +1,5 @@
+stream 4 (validation), preset short, 100 trials, noise seed 12345
+policy                         collision-free [95% CI]  min sep m  dv/agent saturation
+dist_D2.5                     0.980 [0.930,0.994]      103.1     0.623      0.000
+dist_D3                       1.000 [0.963,1.000]      123.0     0.825      0.000
+dist_D3.5                     1.000 [0.963,1.000]      142.9     1.002      0.000

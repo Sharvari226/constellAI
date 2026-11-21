@@ -1,0 +1,26 @@
+﻿
+sigma_p = 25 m: 9 thresholds (0.02 to 0.4), selection stream 4, evaluation stream 6, n = 100, c_b = 0.33 m/s
+  L = 3 m/s: p* = c_b/L = 0.2000; best threshold on selection stream 0.2; evaluation cost there 0.175 m/s per agent
+    calibrated                   effective threshold   0.2000   regret +0.000 [+0.000,+0.000]
+    overconfident (a=2)          effective threshold   0.3333   regret -0.025 [-0.049,+0.004]
+    underconfident (a=0.5)       effective threshold   0.0588   regret +0.177 [+0.134,+0.214]
+    risk over-estimated (b=+1)   effective threshold   0.0842   regret +0.106 [+0.069,+0.139]
+    risk under-estimated (b=-1)  effective threshold   0.4046   regret +0.000 [-0.055,+0.070]  (outside tested grid: clamped)
+  L = 10 m/s: p* = c_b/L = 0.1000; best threshold on selection stream 0.1; evaluation cost there 0.249 m/s per agent
+    calibrated                   effective threshold   0.1000   regret +0.000 [+0.000,+0.000]
+    overconfident (a=2)          effective threshold   0.2500   regret -0.026 [-0.123,+0.094]
+    underconfident (a=0.5)       effective threshold   0.0122   regret +0.305 [+0.274,+0.337]  (outside tested grid: clamped)
+    risk over-estimated (b=+1)   effective threshold   0.0393   regret +0.186 [+0.164,+0.209]
+    risk under-estimated (b=-1)  effective threshold   0.2320   regret -0.019 [-0.115,+0.101]
+  L = 30 m/s: p* = c_b/L = 0.1000; best threshold on selection stream 0.1; evaluation cost there 0.249 m/s per agent
+    calibrated                   effective threshold   0.1000   regret +0.000 [+0.000,+0.000]
+    overconfident (a=2)          effective threshold   0.2500   regret +0.174 [-0.122,+0.569]
+    underconfident (a=0.5)       effective threshold   0.0122   regret +0.305 [+0.275,+0.339]  (outside tested grid: clamped)
+    risk over-estimated (b=+1)   effective threshold   0.0393   regret +0.186 [+0.164,+0.211]
+    risk under-estimated (b=-1)  effective threshold   0.2320   regret +0.181 [-0.114,+0.576]
+  L = 100 m/s: p* = c_b/L = 0.1000; best threshold on selection stream 0.1; evaluation cost there 0.249 m/s per agent
+    calibrated                   effective threshold   0.1000   regret +0.000 [+0.000,+0.000]
+    overconfident (a=2)          effective threshold   0.2500   regret +0.874 [-0.124,+2.201]
+    underconfident (a=0.5)       effective threshold   0.0122   regret +0.305 [+0.275,+0.339]  (outside tested grid: clamped)
+    risk over-estimated (b=+1)   effective threshold   0.0393   regret +0.186 [+0.163,+0.209]
+    risk under-estimated (b=-1)  effective threshold   0.2320   regret +0.881 [-0.117,+2.208]
