@@ -1,0 +1,7 @@
+family,policy,n,final_free,free_lo,free_hi,meets_target,final_dv,dv_lo,dv_hi,val_free,val_dv,dv_change_vs_val
+A0,dist_D4,300,1.0,0.987,1.0,True,1.15,1.116,1.187,1.0,1.14,0.009
+E,heuristic_tau1.2,300,0.953,0.923,0.972,False,0.218,0.201,0.235,0.98,0.199,0.019
+E_hcw,hcw_tau1.5,300,0.99,0.971,0.997,True,0.279,0.26,0.297,1.0,0.272,0.007
+Ehcw_k,hcwm_k1,300,0.99,0.971,0.997,True,0.242,0.224,0.26,0.99,0.22,0.022
+F600,prob_analytic_p0.15_h3,300,0.99,0.971,0.997,True,0.183,0.167,0.2,0.98,0.171,0.012
+B,prob_oracle_p0.5_h3,300,1.0,0.987,1.0,True,0.047,0.04,0.055,1.0,0.047,-0.0

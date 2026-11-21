@@ -1,0 +1,43 @@
+{
+  "source_root": "outputs/ladder_het",
+  "target": 0.98,
+  "sigma": 25.0,
+  "chosen": {
+    "A0": {
+      "policy": "dist_D4",
+      "val_free": 1.0,
+      "val_dv": 1.1403333333332686,
+      "val_n": 100
+    },
+    "E": {
+      "policy": "heuristic_tau1.2",
+      "val_free": 0.98,
+      "val_dv": 0.19899999999998869,
+      "val_n": 100
+    },
+    "E_hcw": {
+      "policy": "hcw_tau1.5",
+      "val_free": 1.0,
+      "val_dv": 0.27166666666665124,
+      "val_n": 100
+    },
+    "Ehcw_k": {
+      "policy": "hcwm_k1",
+      "val_free": 0.99,
+      "val_dv": 0.2203333333333208,
+      "val_n": 100
+    },
+    "F600": {
+      "policy": "prob_analytic_p0.15_h3",
+      "val_free": 0.98,
+      "val_dv": 0.17099999999999027,
+      "val_n": 100
+    },
+    "B": {
+      "policy": "prob_oracle_p0.5_h3",
+      "val_free": 1.0,
+      "val_dv": 0.047333333333330646,
+      "val_n": 100
+    }
+  }
+}

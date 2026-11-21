@@ -1,0 +1,18 @@
+﻿
+sigma_p = 25 m: thresholds chosen on val (stream 4): min dv s.t. collision-free >= 0.98; reported on pilot (stream 6)
+fam    policy                     val free  val dv       pilot free [95% CI]    pilot dv [95% boot CI]
+A0     dist_D4                       1.000   1.140   1.000 [0.963,1.000]      1.124 [1.070,1.181]
+E      heuristic_tau1.2              0.980   0.199   0.970 [0.915,0.990]      0.234 [0.202,0.267]
+E_hcw  hcw_tau1.5                    1.000   0.272   0.980 [0.930,0.994]      0.280 [0.249,0.311]
+Ehcw_k hcwm_k1                       0.990   0.220   1.000 [0.963,1.000]      0.248 [0.218,0.280]
+F600   prob_analytic_p0.15_h3        0.980   0.171   1.000 [0.963,1.000]      0.180 [0.152,0.208]
+F400   (no threshold reaches the target on the validation stream)
+F200   (no threshold reaches the target on the validation stream)
+B      prob_oracle_p0.5_h3           1.000   0.047   1.000 [0.963,1.000]      0.053 [0.038,0.069]
+  paired differences on the pilot stream (first minus second):
+    A0 - E: dv +0.890 [+0.839,+0.941]   collision-free +0.030 [+0.000,+0.070]
+    E - E_hcw: dv -0.046 [-0.070,-0.022]   collision-free -0.010 [-0.030,+0.000]
+    E_hcw - Ehcw_k: dv +0.032 [+0.018,+0.047]   collision-free -0.020 [-0.050,+0.000]
+    Ehcw_k - F600: dv +0.068 [+0.044,+0.092]   collision-free +0.000 [+0.000,+0.000]
+    E_hcw - F600: dv +0.100 [+0.077,+0.124]   collision-free -0.020 [-0.050,+0.000]
+    F600 - B: dv +0.127 [+0.104,+0.152]   collision-free +0.000 [+0.000,+0.000]
