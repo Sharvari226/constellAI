@@ -1,0 +1,7 @@
+stream 6 (pilot), preset short, 100 trials, noise seed 12345
+policy                         collision-free [95% CI]  min sep m  dv/agent saturation
+heuristic_tau1.2              0.970 [0.915,0.990]       90.8     0.235      0.000
+heuristic_tau1.5              0.990 [0.946,0.998]      102.2     0.318      0.000
+heuristic_tau2                1.000 [0.963,1.000]      119.8     0.432      0.000
+heuristic_tau3                1.000 [0.963,1.000]      153.8     0.710      0.000
+heuristic_tau5                1.000 [0.963,1.000]      186.7     1.415      0.000

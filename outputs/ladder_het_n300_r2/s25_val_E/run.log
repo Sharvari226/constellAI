@@ -1,0 +1,6 @@
+stream 4 (validation), preset short, 300 trials, noise seed 12345
+policy                         collision-free [95% CI]  min sep m  dv/agent saturation
+heuristic_tau1.2              0.953 [0.923,0.972]       84.9     0.203      0.000
+heuristic_tau1.5              0.987 [0.966,0.995]       95.2     0.292      0.000
+heuristic_tau2                1.000 [0.987,1.000]      113.2     0.426      0.000
+heuristic_tau3                1.000 [0.987,1.000]      149.2     0.708      0.000

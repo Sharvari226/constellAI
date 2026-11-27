@@ -1,0 +1,6 @@
+stream 6 (pilot), preset short, 300 trials, noise seed 12345
+policy                         collision-free [95% CI]  min sep m  dv/agent saturation
+zero_thrust                   0.560 [0.503,0.615]       75.5     0.000      0.000
+constant_burn                 0.797 [0.748,0.838]       90.1    31.320      1.000
+dist_D2                       0.957 [0.927,0.975]       90.8     0.417      0.000
+dist_D4                       1.000 [0.987,1.000]      163.8     1.118      0.000

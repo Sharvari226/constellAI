@@ -1,0 +1,163 @@
+﻿48 jobs, 4 workers ...
+  s5_val_A0: ok
+  s5_val_E: ok
+  s5_val_F: ok
+  s5_val_B: ok
+  s5_val_E2: ok
+  s5_val_F2: ok
+  s5_val_A02: ok
+  s5_val_E3: ok
+  s5_pilot_A0: ok
+  s5_pilot_E: ok
+  s5_pilot_F: ok
+  s5_pilot_B: ok
+  s5_pilot_E2: ok
+  s5_pilot_F2: ok
+  s5_pilot_A02: ok
+  s5_pilot_E3: ok
+  s25_val_A0: ok
+  s25_val_E: ok
+  s25_val_F: ok
+  s25_val_B: ok
+  s25_val_E2: ok
+  s25_val_F2: ok
+  s25_val_A02: ok
+  s25_val_E3: ok
+  s25_pilot_A0: ok
+  s25_pilot_E: ok
+  s25_pilot_F: ok
+  s25_pilot_B: ok
+  s25_pilot_E2: ok
+  s25_pilot_F2: ok
+  s25_pilot_A02: ok
+  s25_pilot_E3: ok
+  s50_val_A0: ok
+  s50_val_E: ok
+  s50_val_F: ok
+  s50_val_B: ok
+  s50_val_E2: ok
+  s50_val_F2: ok
+  s50_val_A02: ok
+  s50_val_E3: ok
+  s50_pilot_A0: ok
+  s50_pilot_E: ok
+  s50_pilot_F: ok
+  s50_pilot_B: ok
+  s50_pilot_E2: ok
+  s50_pilot_F2: ok
+  s50_pilot_A02: ok
+  s50_pilot_E3: ok
+
+sigma_p = 5 m   (val = stream 4, pilot = stream 6)
+policy                       val free  val dv pilot free pilot dv
+zero_thrust                     0.550   0.000      0.550    0.000
+prob_oracle_p0.5_h3             1.000   0.046      1.000    0.047
+prob_analytic_p0.4_h3           1.000   0.060      1.000    0.058
+prob_analytic_p0.3_h3           1.000   0.072      1.000    0.069
+hcw_tau0.9                      0.970   0.081      0.980    0.070
+hcw_tau1                        1.000   0.091      0.990    0.082
+hcw_tau1.05                     1.000   0.098      1.000    0.087
+heuristic_tau0.9                0.760   0.095      0.800    0.090
+prob_analytic_p0.2_h3           1.000   0.100      1.000    0.090
+hcw_tau1.1                      1.000   0.105      1.000    0.096
+heuristic_tau1                  0.960   0.109      0.980    0.105
+prob_analytic_p0.15_h3          1.000   0.119      1.000    0.105
+hcw_tau1.2                      1.000   0.118      1.000    0.109
+heuristic_tau1.05               1.000   0.119      1.000    0.110
+heuristic_tau1.1                1.000   0.126      1.000    0.115
+heuristic_tau1.2                1.000   0.142      1.000    0.134
+prob_analytic_p0.1_h3           1.000   0.151      1.000    0.145
+hcw_tau1.5                      1.000   0.175      1.000    0.149
+prob_analytic_p0.07_h3          1.000   0.190      1.000    0.181
+heuristic_tau1.5                1.000   0.189      1.000    0.185
+prob_analytic_p0.05_h3          1.000   0.241      1.000    0.229
+hcw_tau2                        1.000   0.265      1.000    0.250
+prob_analytic_p0.03_h3          1.000   0.297      1.000    0.279
+heuristic_tau2                  1.000   0.280      1.000    0.280
+prob_analytic_p0.02_h3          1.000   0.347      1.000    0.325
+dist_D2                         0.980   0.469      0.990    0.445
+heuristic_tau3                  1.000   0.492      1.000    0.513
+dist_D2.5                       1.000   0.607      1.000    0.619
+dist_D3                         1.000   0.781      1.000    0.772
+dist_D3.5                       1.000   0.944      1.000    0.929
+dist_D4                         1.000   1.138      1.000    1.110
+heuristic_tau5                  1.000   1.303      1.000    1.256
+dist_D8                         1.000   2.280      1.000    2.271
+dist_D16                        1.000   3.912      1.000    3.900
+constant_burn                   0.750  30.506      0.770   30.838
+
+sigma_p = 25 m   (val = stream 4, pilot = stream 6)
+policy                       val free  val dv pilot free pilot dv
+zero_thrust                     0.550   0.000      0.550    0.000
+prob_oracle_p0.5_h3             1.000   0.049      1.000    0.056
+prob_analytic_p0.4_h3           0.950   0.083      0.920    0.086
+prob_analytic_p0.3_h3           0.990   0.107      0.940    0.112
+hcw_tau0.9                      0.920   0.147      0.920    0.151
+heuristic_tau0.9                0.830   0.164      0.860    0.154
+hcw_tau1                        0.960   0.172      0.950    0.167
+prob_analytic_p0.2_h3           0.990   0.148      0.960    0.168
+hcw_tau1.05                     0.970   0.189      0.960    0.175
+hcw_tau1.1                      0.970   0.195      0.960    0.185
+heuristic_tau1                  0.910   0.191      0.930    0.187
+heuristic_tau1.05               0.950   0.203      0.930    0.199
+prob_analytic_p0.15_h3          0.990   0.196      0.980    0.210
+hcw_tau1.2                      0.990   0.215      0.970    0.211
+heuristic_tau1.1                0.950   0.211      0.950    0.213
+heuristic_tau1.2                0.990   0.246      0.970    0.235
+prob_analytic_p0.1_h3           0.990   0.257      1.000    0.264
+hcw_tau1.5                      0.990   0.292      0.980    0.289
+heuristic_tau1.5                0.990   0.307      0.990    0.318
+prob_analytic_p0.07_h3          1.000   0.335      1.000    0.325
+prob_analytic_p0.05_h3          1.000   0.406      1.000    0.400
+hcw_tau2                        1.000   0.415      1.000    0.425
+heuristic_tau2                  0.990   0.456      1.000    0.432
+dist_D2                         0.940   0.430      0.970    0.453
+prob_analytic_p0.03_h3          1.000   0.506      1.000    0.523
+prob_analytic_p0.02_h3          1.000   0.602      1.000    0.598
+dist_D2.5                       1.000   0.629      1.000    0.633
+heuristic_tau3                  1.000   0.726      1.000    0.710
+dist_D3                         1.000   0.785      1.000    0.791
+dist_D3.5                       1.000   0.955      1.000    0.941
+dist_D4                         1.000   1.127      1.000    1.123
+heuristic_tau5                  1.000   1.436      1.000    1.415
+dist_D8                         1.000   2.290      1.000    2.286
+dist_D16                        1.000   3.918      1.000    3.917
+constant_burn                   0.750  30.506      0.770   30.838
+
+sigma_p = 50 m   (val = stream 4, pilot = stream 6)
+policy                       val free  val dv pilot free pilot dv
+zero_thrust                     0.550   0.000      0.550    0.000
+prob_oracle_p0.5_h3             1.000   0.053      1.000    0.051
+prob_analytic_p0.4_h3           0.780   0.080      0.790    0.090
+prob_analytic_p0.3_h3           0.870   0.119      0.800    0.135
+hcw_tau0.9                      0.780   0.196      0.860    0.189
+prob_analytic_p0.2_h3           0.910   0.186      0.880    0.199
+heuristic_tau0.9                0.780   0.181      0.800    0.211
+hcw_tau1                        0.840   0.212      0.870    0.219
+heuristic_tau1                  0.820   0.205      0.780    0.235
+hcw_tau1.05                     0.870   0.233      0.900    0.236
+prob_analytic_p0.15_h3          0.950   0.234      0.940    0.254
+hcw_tau1.1                      0.900   0.249      0.910    0.261
+heuristic_tau1.05               0.850   0.230      0.830    0.266
+heuristic_tau1.1                0.860   0.241      0.860    0.278
+hcw_tau1.2                      0.930   0.275      0.920    0.286
+heuristic_tau1.2                0.920   0.271      0.860    0.296
+prob_analytic_p0.1_h3           0.970   0.328      0.980    0.334
+hcw_tau1.5                      0.980   0.368      0.980    0.406
+prob_analytic_p0.07_h3          0.980   0.395      0.990    0.423
+heuristic_tau1.5                0.980   0.363      0.950    0.427
+dist_D2                         0.900   0.413      0.940    0.448
+prob_analytic_p0.05_h3          0.990   0.485      1.000    0.520
+hcw_tau2                        0.990   0.519      0.990    0.571
+heuristic_tau2                  1.000   0.551      0.980    0.578
+dist_D2.5                       0.980   0.623      0.990    0.647
+prob_analytic_p0.03_h3          1.000   0.629      1.000    0.663
+prob_analytic_p0.02_h3          1.000   0.737      1.000    0.769
+dist_D3                         1.000   0.825      0.990    0.807
+heuristic_tau3                  1.000   0.826      0.990    0.851
+dist_D3.5                       1.000   1.002      1.000    0.970
+dist_D4                         1.000   1.141      1.000    1.147
+heuristic_tau5                  1.000   1.490      0.990    1.537
+dist_D8                         0.990   2.313      1.000    2.306
+dist_D16                        0.990   3.929      1.000    3.950
+constant_burn                   0.750  30.506      0.770   30.838

@@ -1,0 +1,405 @@
+﻿RESULTS DIGEST 20261110_104244
+
+step                    exit minutes
+----                    ---- -------
+00_provenance              0     0.1
+01_unit_tests              0     2.5
+02_unit_tests_by_file      0       0
+03_nees_cooperative        0     0.7
+04_nees_noncooperative     0     0.7
+05_forecast_calibration    0     1.6
+06_reference_baselines     0     0.8
+07_ladder_run              0       0
+08_ladder_select           0       0
+09_rl_pilot_report         0       0
+10_rl_pilot_paired         0       0
+11_rl_saturation           0     0.2
+12_m3_pilot_saved          0       0
+
+
+
+
+===== provenance and integrity =====
+date: 2026-11-10T10:42:44
+branch: feat/noisy-tracks
+commit: 352982fb717b23115082f8ba17847a198dacaeba
+uncommitted source changes (should be none):
+python 3.13.7 | numpy 2.5.0 | torch 2.12.1+cpu
+final-test-stream (2) evaluations present, must be 0 before the one-time final run: 0
+
+===== unit tests, full suite =====
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+299 passed, 1 skipped, 2 warnings in 144.49s (0:02:24)
+
+===== unit tests by module =====
+test module                                    passed failed skipped
+test_agent_collision                                4      0       0
+test_baseline                                       5      0       0
+test_build                                          4      0       0
+test_calibration                                    3      0       0
+test_cbf_filter                                     6      0       0
+test_checkpoint                                     7      0       0
+test_conjunction                                    5      0       0
+test_constrained_mappo                              5      0       0
+test_env_exposure                                   5      0       0
+test_environment                                    9      0       0
+test_envs                                          11      0       0
+test_fetch                                          3      0       0
+test_filtered_environment                           3      0       0
+test_filters                                        4      0       0
+test_forecast_augmented_environment                 4      0       0
+test_forecast_events                               11      0       0
+test_gain_sweep                                    13      0       0
+test_heuristic                                      6      0       0
+test_ippo                                           5      0       0
+test_kalman                                         8      0       0
+test_maddpg                                         6      0       0
+test_mappo                                          5      0       0
+test_merge_results                                  2      0       0
+test_monte_carlo                                    7      0       0
+test_multi_agent_environment                        6      0       0
+test_multi_threat_filter                            6      0       0
+test_network_hooks                                  7      0       0
+test_nonlinear_env                                 14      0       0
+test_objective                                      8      0       0
+test_objective_env                                 10      0       0
+test_policies                                      16      0       0
+test_regime                                         4      0       0
+test_relative_motion                                3      0       0
+test_scaled_env                                     9      0       0
+test_scenarios                                      7      0       0
+test_screening                                      3      0       0
+test_single_agent_baseline                          5      0       0
+test_spacetrack                                     3      0       1
+test_stats                                          5      0       0
+test_synthetic                                      4      0       0
+test_tgn_memory_snapshot                            2      0       0
+test_tiers                                          5      0       0
+test_tle                                            9      0       0
+test_tracked_env                                   10      0       0
+test_train_m4_ladder                                8      0       0
+test_trials                                         5      0       0
+test_triggers                                       5      0       0
+test_validation                                     4      0       0
+TOTAL                                             299      0       1
+
+===== tracking-filter consistency, neighbour thrust broadcast (NEES target 6) =====
+accel_std=0.00000, episodes=30; target NEES = 6 (per-episode mean +/- 2 SE)
+ sigma_p   policy              primary            neighbour
+     5.0     zero       5.98 +/-  0.45       5.82 +/-  0.34
+     5.0   random       6.09 +/-  0.49       5.70 +/-  0.38
+     5.0     burn       5.96 +/-  0.47       5.86 +/-  0.34
+    25.0     zero       5.98 +/-  0.45       5.81 +/-  0.34
+    25.0   random       6.09 +/-  0.49       5.70 +/-  0.38
+    25.0     burn       5.96 +/-  0.47       5.85 +/-  0.33
+    50.0     zero       5.97 +/-  0.45       5.79 +/-  0.34
+    50.0   random       6.08 +/-  0.49       5.69 +/-  0.38
+    50.0     burn       5.95 +/-  0.46       5.83 +/-  0.33
+
+===== tracking-filter consistency, no broadcast (contrast) =====
+accel_std=0.00577, episodes=30; target NEES = 6 (per-episode mean +/- 2 SE)
+ sigma_p   policy              primary            neighbour
+     5.0     zero       5.98 +/-  0.45       3.34 +/-  0.07
+     5.0   random       6.09 +/-  0.49       6.06 +/-  0.12
+     5.0     burn       5.96 +/-  0.47      35.55 +/-  0.27
+    25.0     zero       5.98 +/-  0.45       3.49 +/-  0.11
+    25.0   random       6.09 +/-  0.49       6.03 +/-  0.18
+    25.0     burn       5.96 +/-  0.47      75.60 +/-  2.38
+    50.0     zero       5.97 +/-  0.45       3.60 +/-  0.15
+    50.0   random       6.08 +/-  0.49       6.00 +/-  0.21
+    50.0     burn       5.95 +/-  0.46     101.31 +/-  5.97
+
+===== analytic forecast: Brier skill and calibration =====
+analytic Monte Carlo forecast, filter consistent (thrust broadcast), policy=zero, episodes=20, stride=5, samples=2000
+
+sigma_p = 5 m (0.1 r_c)
+  H(s)      n   rate   Brier   baseB         skill [95% CI]           ECE [95% CI] ECE floor
+   100   5497  0.005  0.0000  0.0051   0.996 [ 0.99, 1.00]  0.0001 [0.000,0.000]    0.0002
+   200   5497  0.011  0.0003  0.0104   0.970 [ 0.93, 0.99]  0.0002 [0.000,0.001]    0.0003
+   400   5497  0.020  0.0021  0.0198   0.896 [ 0.84, 0.93]  0.0019 [0.000,0.004]    0.0004
+   600   5497  0.025  0.0051  0.0243   0.790 [ 0.77, 0.81]  0.0052 [0.001,0.012]    0.0006
+  Brier beats base rate at every horizon: PASS
+
+sigma_p = 25 m (0.5 r_c)
+  H(s)      n   rate   Brier   baseB         skill [95% CI]           ECE [95% CI] ECE floor
+   100   5497  0.005  0.0008  0.0051   0.844 [ 0.74, 0.91]  0.0001 [0.000,0.001]    0.0003
+   200   5497  0.011  0.0028  0.0104   0.733 [ 0.61, 0.82]  0.0017 [0.000,0.005]    0.0006
+   400   5497  0.020  0.0092  0.0198   0.538 [ 0.43, 0.62]  0.0083 [0.001,0.020]    0.0010
+   600   5497  0.025  0.0136  0.0243   0.440 [ 0.37, 0.49]  0.0126 [0.002,0.029]    0.0008
+  Brier beats base rate at every horizon: PASS
+
+sigma_p = 50 m (1.0 r_c)
+  H(s)      n   rate   Brier   baseB         skill [95% CI]           ECE [95% CI] ECE floor
+   100   5497  0.005  0.0021  0.0051   0.584 [ 0.43, 0.69]  0.0008 [0.000,0.003]    0.0003
+   200   5497  0.011  0.0054  0.0104   0.483 [ 0.34, 0.60]  0.0034 [0.000,0.010]    0.0007
+   400   5497  0.020  0.0135  0.0198   0.319 [ 0.19, 0.40]  0.0110 [0.002,0.027]    0.0012
+   600   5497  0.025  0.0181  0.0243   0.257 [ 0.18, 0.32]  0.0154 [0.002,0.035]    0.0009
+  Brier beats base rate at every horizon: PASS
+
+===== reference policies on the fixed environment =====
+
+short warning (150.0, 600.0), 100 episodes, stream 6, gamma=0.99
+ policy    collision-free [95% CI] agent coll.  dv/agent m/s  disc cost mean     p90
+   zero   0.550 [0.452,0.644]       0.197         0.000         14.3088  23.435
+ random   0.730 [0.636,0.807]       0.107        17.527         10.9950  21.867
+   burn   0.770 [0.678,0.842]       0.133        30.838         11.4461  23.325
+
+long warning (500.0, 1500.0), 100 episodes, stream 6, gamma=0.99
+ policy    collision-free [95% CI] agent coll.  dv/agent m/s  disc cost mean     p90
+   zero   0.550 [0.452,0.644]       0.197         0.000          9.8545  19.098
+ random   0.960 [0.902,0.984]       0.017        18.992          3.0312  10.383
+   burn   0.860 [0.779,0.915]       0.083        32.887          6.0757  15.068
+
+===== trigger ladder, all thresholds =====
+sigma_p = 5 m   (val = stream 4, pilot = stream 6)
+policy                       val free  val dv pilot free pilot dv
+zero_thrust                     0.550   0.000      0.550    0.000
+prob_oracle_p0.5_h3             1.000   0.046      1.000    0.047
+prob_analytic_p0.4_h3           1.000   0.060      1.000    0.058
+prob_analytic_p0.3_h3           1.000   0.072      1.000    0.069
+hcw_tau0.9                      0.970   0.081      0.980    0.070
+hcw_tau1                        1.000   0.091      0.990    0.082
+hcw_tau1.05                     1.000   0.098      1.000    0.087
+heuristic_tau0.9                0.760   0.095      0.800    0.090
+prob_analytic_p0.2_h3           1.000   0.100      1.000    0.090
+hcw_tau1.1                      1.000   0.105      1.000    0.096
+heuristic_tau1                  0.960   0.109      0.980    0.105
+prob_analytic_p0.15_h3          1.000   0.119      1.000    0.105
+hcw_tau1.2                      1.000   0.118      1.000    0.109
+heuristic_tau1.05               1.000   0.119      1.000    0.110
+heuristic_tau1.1                1.000   0.126      1.000    0.115
+heuristic_tau1.2                1.000   0.142      1.000    0.134
+prob_analytic_p0.1_h3           1.000   0.151      1.000    0.145
+hcw_tau1.5                      1.000   0.175      1.000    0.149
+prob_analytic_p0.07_h3          1.000   0.190      1.000    0.181
+heuristic_tau1.5                1.000   0.189      1.000    0.185
+prob_analytic_p0.05_h3          1.000   0.241      1.000    0.229
+hcw_tau2                        1.000   0.265      1.000    0.250
+prob_analytic_p0.03_h3          1.000   0.297      1.000    0.279
+heuristic_tau2                  1.000   0.280      1.000    0.280
+prob_analytic_p0.02_h3          1.000   0.347      1.000    0.325
+dist_D2                         0.980   0.469      0.990    0.445
+heuristic_tau3                  1.000   0.492      1.000    0.513
+dist_D2.5                       1.000   0.607      1.000    0.619
+dist_D3                         1.000   0.781      1.000    0.772
+dist_D3.5                       1.000   0.944      1.000    0.929
+dist_D4                         1.000   1.138      1.000    1.110
+heuristic_tau5                  1.000   1.303      1.000    1.256
+dist_D8                         1.000   2.280      1.000    2.271
+dist_D16                        1.000   3.912      1.000    3.900
+constant_burn                   0.750  30.506      0.770   30.838
+
+sigma_p = 25 m   (val = stream 4, pilot = stream 6)
+policy                       val free  val dv pilot free pilot dv
+zero_thrust                     0.550   0.000      0.550    0.000
+prob_oracle_p0.5_h3             1.000   0.049      1.000    0.056
+prob_analytic_p0.4_h3           0.950   0.083      0.920    0.086
+prob_analytic_p0.3_h3           0.990   0.107      0.940    0.112
+hcw_tau0.9                      0.920   0.147      0.920    0.151
+heuristic_tau0.9                0.830   0.164      0.860    0.154
+hcw_tau1                        0.960   0.172      0.950    0.167
+prob_analytic_p0.2_h3           0.990   0.148      0.960    0.168
+hcw_tau1.05                     0.970   0.189      0.960    0.175
+hcw_tau1.1                      0.970   0.195      0.960    0.185
+heuristic_tau1                  0.910   0.191      0.930    0.187
+heuristic_tau1.05               0.950   0.203      0.930    0.199
+prob_analytic_p0.15_h3          0.990   0.196      0.980    0.210
+hcw_tau1.2                      0.990   0.215      0.970    0.211
+heuristic_tau1.1                0.950   0.211      0.950    0.213
+heuristic_tau1.2                0.990   0.246      0.970    0.235
+prob_analytic_p0.1_h3           0.990   0.257      1.000    0.264
+hcw_tau1.5                      0.990   0.292      0.980    0.289
+heuristic_tau1.5                0.990   0.307      0.990    0.318
+prob_analytic_p0.07_h3          1.000   0.335      1.000    0.325
+prob_analytic_p0.05_h3          1.000   0.406      1.000    0.400
+hcw_tau2                        1.000   0.415      1.000    0.425
+heuristic_tau2                  0.990   0.456      1.000    0.432
+dist_D2                         0.940   0.430      0.970    0.453
+prob_analytic_p0.03_h3          1.000   0.506      1.000    0.523
+prob_analytic_p0.02_h3          1.000   0.602      1.000    0.598
+dist_D2.5                       1.000   0.629      1.000    0.633
+heuristic_tau3                  1.000   0.726      1.000    0.710
+dist_D3                         1.000   0.785      1.000    0.791
+dist_D3.5                       1.000   0.955      1.000    0.941
+dist_D4                         1.000   1.127      1.000    1.123
+heuristic_tau5                  1.000   1.436      1.000    1.415
+dist_D8                         1.000   2.290      1.000    2.286
+dist_D16                        1.000   3.918      1.000    3.917
+constant_burn                   0.750  30.506      0.770   30.838
+
+sigma_p = 50 m   (val = stream 4, pilot = stream 6)
+policy                       val free  val dv pilot free pilot dv
+zero_thrust                     0.550   0.000      0.550    0.000
+prob_oracle_p0.5_h3             1.000   0.053      1.000    0.051
+prob_analytic_p0.4_h3           0.780   0.080      0.790    0.090
+prob_analytic_p0.3_h3           0.870   0.119      0.800    0.135
+hcw_tau0.9                      0.780   0.196      0.860    0.189
+prob_analytic_p0.2_h3           0.910   0.186      0.880    0.199
+heuristic_tau0.9                0.780   0.181      0.800    0.211
+hcw_tau1                        0.840   0.212      0.870    0.219
+heuristic_tau1                  0.820   0.205      0.780    0.235
+hcw_tau1.05                     0.870   0.233      0.900    0.236
+prob_analytic_p0.15_h3          0.950   0.234      0.940    0.254
+hcw_tau1.1                      0.900   0.249      0.910    0.261
+heuristic_tau1.05               0.850   0.230      0.830    0.266
+heuristic_tau1.1                0.860   0.241      0.860    0.278
+hcw_tau1.2                      0.930   0.275      0.920    0.286
+heuristic_tau1.2                0.920   0.271      0.860    0.296
+prob_analytic_p0.1_h3           0.970   0.328      0.980    0.334
+hcw_tau1.5                      0.980   0.368      0.980    0.406
+prob_analytic_p0.07_h3          0.980   0.395      0.990    0.423
+heuristic_tau1.5                0.980   0.363      0.950    0.427
+dist_D2                         0.900   0.413      0.940    0.448
+prob_analytic_p0.05_h3          0.990   0.485      1.000    0.520
+hcw_tau2                        0.990   0.519      0.990    0.571
+heuristic_tau2                  1.000   0.551      0.980    0.578
+dist_D2.5                       0.980   0.623      0.990    0.647
+prob_analytic_p0.03_h3          1.000   0.629      1.000    0.663
+prob_analytic_p0.02_h3          1.000   0.737      1.000    0.769
+dist_D3                         1.000   0.825      0.990    0.807
+heuristic_tau3                  1.000   0.826      0.990    0.851
+dist_D3.5                       1.000   1.002      1.000    0.970
+dist_D4                         1.000   1.141      1.000    1.147
+heuristic_tau5                  1.000   1.490      0.990    1.537
+dist_D8                         0.990   2.313      1.000    2.306
+dist_D16                        0.990   3.929      1.000    3.950
+constant_burn                   0.750  30.506      0.770   30.838
+
+===== ladder: thresholds chosen on validation, reported on pilot =====
+
+sigma_p = 5 m: thresholds chosen on val (stream 4): min dv s.t. collision-free >= 0.98; reported on pilot (stream 6)
+fam policy                     val free  val dv       pilot free [95% CI]    pilot dv [95% boot CI]
+A0  dist_D2                       0.980   0.469   0.990 [0.946,0.998]      0.445 [0.380,0.513]
+E   heuristic_tau1.05             1.000   0.119   1.000 [0.963,1.000]      0.110 [0.092,0.129]
+E_hcwhcw_tau1                      1.000   0.091   0.990 [0.946,0.998]      0.082 [0.068,0.095]
+F   prob_analytic_p0.4_h3         1.000   0.060   1.000 [0.963,1.000]      0.058 [0.045,0.073]
+B   prob_oracle_p0.5_h3           1.000   0.046   1.000 [0.963,1.000]      0.047 [0.033,0.061]
+  paired differences on the pilot stream (first minus second):
+    A0 - E: dv +0.336 [+0.276,+0.395]   collision-free -0.010 [-0.030,+0.000]
+    E - E_hcw: dv +0.028 [+0.014,+0.043]   collision-free +0.010 [+0.000,+0.030]
+    E_hcw - F: dv +0.023 [+0.015,+0.032]   collision-free -0.010 [-0.030,+0.000]
+    E - F: dv +0.051 [+0.039,+0.065]   collision-free +0.000 [+0.000,+0.000]
+    F - B: dv +0.012 [+0.003,+0.021]   collision-free +0.000 [+0.000,+0.000]
+
+sigma_p = 25 m: thresholds chosen on val (stream 4): min dv s.t. collision-free >= 0.98; reported on pilot (stream 6)
+fam policy                     val free  val dv       pilot free [95% CI]    pilot dv [95% boot CI]
+A0  dist_D2.5                     1.000   0.629   1.000 [0.963,1.000]      0.633 [0.559,0.708]
+E   heuristic_tau1.2              0.990   0.246   0.970 [0.915,0.990]      0.235 [0.204,0.267]
+E_hcwhcw_tau1.2                    0.990   0.215   0.970 [0.915,0.990]      0.211 [0.184,0.238]
+F   prob_analytic_p0.3_h3         0.990   0.107   0.940 [0.875,0.972]      0.112 [0.091,0.133]
+B   prob_oracle_p0.5_h3           1.000   0.049   1.000 [0.963,1.000]      0.056 [0.037,0.080]
+  paired differences on the pilot stream (first minus second):
+    A0 - E: dv +0.398 [+0.333,+0.462]   collision-free +0.030 [+0.000,+0.070]
+    E - E_hcw: dv +0.024 [+0.006,+0.043]   collision-free +0.000 [+0.000,+0.000]
+    E_hcw - F: dv +0.099 [+0.078,+0.121]   collision-free +0.030 [-0.010,+0.080]
+    E - F: dv +0.123 [+0.097,+0.151]   collision-free +0.030 [-0.010,+0.080]
+    F - B: dv +0.056 [+0.033,+0.077]   collision-free -0.060 [-0.110,-0.020]
+
+sigma_p = 50 m: thresholds chosen on val (stream 4): min dv s.t. collision-free >= 0.98; reported on pilot (stream 6)
+fam policy                     val free  val dv       pilot free [95% CI]    pilot dv [95% boot CI]
+A0  dist_D2.5                     0.980   0.623   0.990 [0.946,0.998]      0.647 [0.575,0.721]
+E   heuristic_tau1.5              0.980   0.363   0.950 [0.888,0.978]      0.427 [0.383,0.473]
+E_hcwhcw_tau1.5                    0.980   0.368   0.980 [0.930,0.994]      0.406 [0.362,0.453]
+F   prob_analytic_p0.07_h3        0.980   0.395   0.990 [0.946,0.998]      0.423 [0.381,0.465]
+B   prob_oracle_p0.5_h3           1.000   0.053   1.000 [0.963,1.000]      0.051 [0.037,0.065]
+  paired differences on the pilot stream (first minus second):
+    A0 - E: dv +0.220 [+0.161,+0.279]   collision-free +0.040 [+0.010,+0.080]
+    E - E_hcw: dv +0.021 [-0.013,+0.055]   collision-free -0.030 [-0.070,+0.000]
+    E_hcw - F: dv -0.017 [-0.049,+0.015]   collision-free -0.010 [-0.030,+0.000]
+    E - F: dv +0.004 [-0.029,+0.037]   collision-free -0.040 [-0.080,-0.010]
+    F - B: dv +0.373 [+0.337,+0.410]   collision-free -0.010 [-0.030,+0.000]
+
+===== RL planner pilot =====
+
+pilot stream 6, preset short, 100 trials per checkpoint, sigma_p 25.0, 300 training episodes, reward scale 0.05
+arm        budget  n   collision-free (mean +/- sd over seeds)        dv/agent m/s  min sep m saturation
+oracle        5.7  3                       0.910 +/-  0.044       23.68 +/-  2.75      133.8      0.679
+reactive      5.7  3                       0.913 +/-  0.038       19.75 +/-  3.24      132.4      0.544
+  per run: reactive_b5.7_s0 free 0.93 dv 23.3; reactive_b5.7_s1 free 0.94 dv 19.0; reactive_b5.7_s2 free 0.87 dv 16.9; oracle_b5.7_s0 free 0.89 dv 26.5; oracle_b5.7_s1 free 0.96 dv 21.1; oracle_b5.7_s2 free 0.88 dv 23.4
+
+reference policies (same scenarios, same noise seed):
+  constant_burn      free 0.770 [0.678,0.842]  dv  30.84  min sep   84.2
+  heuristic_tau1.2   free 0.970 [0.915,0.990]  dv   0.23  min sep   90.8
+  heuristic_tau1.5   free 0.990 [0.946,0.998]  dv   0.32  min sep  102.2
+  heuristic_tau2     free 1.000 [0.963,1.000]  dv   0.43  min sep  119.8
+  heuristic_tau3     free 1.000 [0.963,1.000]  dv   0.71  min sep  153.8
+  heuristic_tau5     free 1.000 [0.963,1.000]  dv   1.41  min sep  186.7
+  zero_thrust        free 0.550 [0.452,0.644]  dv   0.00  min sep   73.6
+
+===== RL planner paired analysis =====
+reactive: 3 seeds x 100 scenarios   (S<5: descriptive only)
+oracle: 3 seeds x 100 scenarios   (S<5: descriptive only)
+
+collision-free rate: point estimates
+  reactive 0.913   oracle 0.910   zero_thrust 0.550   constant_burn 0.770   heuristic_tau1.2 0.970   heuristic_tau1.5 0.990   heuristic_tau2 1.000   heuristic_tau3 1.000   heuristic_tau5 1.000
+collision-free rate: paired differences, 95% bootstrap interval
+  reactive - oracle: +0.003 [-0.073, +0.080]
+  reactive - zero_thrust: +0.363 [+0.260, +0.467]
+  reactive - constant_burn: +0.143 [+0.047, +0.237]
+  reactive - heuristic_tau1.2: -0.057 [-0.130, +0.007]
+  reactive - heuristic_tau1.5: -0.077 [-0.140, -0.023]
+  reactive - heuristic_tau2: -0.087 [-0.150, -0.040]
+  reactive - heuristic_tau3: -0.087 [-0.150, -0.040]
+  reactive - heuristic_tau5: -0.087 [-0.150, -0.040]
+  oracle - zero_thrust: +0.360 [+0.253, +0.470]
+  oracle - constant_burn: +0.140 [+0.050, +0.233]
+  oracle - heuristic_tau1.2: -0.060 [-0.130, +0.003]
+  oracle - heuristic_tau1.5: -0.080 [-0.143, -0.020]
+  oracle - heuristic_tau2: -0.090 [-0.153, -0.037]
+  oracle - heuristic_tau3: -0.090 [-0.153, -0.037]
+  oracle - heuristic_tau5: -0.090 [-0.153, -0.037]
+
+dv per agent (m/s): point estimates
+  reactive 19.751   oracle 23.679   zero_thrust 0.000   constant_burn 30.838   heuristic_tau1.2 0.235   heuristic_tau1.5 0.318   heuristic_tau2 0.432   heuristic_tau3 0.710   heuristic_tau5 1.415
+dv per agent (m/s): paired differences, 95% bootstrap interval
+  reactive - oracle: -3.93 [-7.89, -0.00]
+  reactive - zero_thrust: +19.75 [+16.97, +23.08]
+  reactive - constant_burn: -11.09 [-14.23, -7.60]
+  reactive - heuristic_tau1.2: +19.52 [+16.73, +22.84]
+  reactive - heuristic_tau1.5: +19.43 [+16.65, +22.76]
+  reactive - heuristic_tau2: +19.32 [+16.53, +22.64]
+  reactive - heuristic_tau3: +19.04 [+16.27, +22.37]
+  reactive - heuristic_tau5: +18.34 [+15.55, +21.67]
+  oracle - zero_thrust: +23.68 [+21.22, +26.45]
+  oracle - constant_burn: -7.16 [-9.91, -4.21]
+  oracle - heuristic_tau1.2: +23.44 [+20.98, +26.21]
+  oracle - heuristic_tau1.5: +23.36 [+20.89, +26.13]
+  oracle - heuristic_tau2: +23.25 [+20.78, +26.03]
+  oracle - heuristic_tau3: +22.97 [+20.50, +25.73]
+  oracle - heuristic_tau5: +22.26 [+19.80, +25.03]
+
+===== RL actor saturation =====
+outputs\pilot1\reactive_b5.7_s0\constrained_mappo_seed0.pt: 5642 live agent-steps over 10 pilot episodes
+  fraction with any |mean| > 1 (clipped by the env): 0.903
+  fraction with any |mean| > 3: 0.000
+  max |mean| percentiles 10/50/90: [1.01, 1.89, 2.17]
+  mean signed action per axis: [-0.4, -0.2, -1.74]
+  policy std per axis (training exploration): [0.3490000069141388, 0.29899999499320984, 0.3779999911785126]
+outputs\pilot1\reactive_b5.7_s1\constrained_mappo_seed1.pt: 5654 live agent-steps over 10 pilot episodes
+  fraction with any |mean| > 1 (clipped by the env): 0.299
+  fraction with any |mean| > 3: 0.008
+  max |mean| percentiles 10/50/90: [0.44, 0.71, 1.48]
+  mean signed action per axis: [-0.39, 0.07, 0.02]
+  policy std per axis (training exploration): [0.1340000033378601, 0.2540000081062317, 0.21899999678134918]
+outputs\pilot1\reactive_b5.7_s2\constrained_mappo_seed2.pt: 6000 live agent-steps over 10 pilot episodes
+  fraction with any |mean| > 1 (clipped by the env): 0.279
+  fraction with any |mean| > 3: 0.000
+  max |mean| percentiles 10/50/90: [0.33, 0.85, 1.4]
+  mean signed action per axis: [0.36, 0.21, 0.1]
+  policy std per axis (training exploration): [0.2919999957084656, 0.2280000001192093, 0.2709999978542328]
+
+===== M3 pilot (saved log) =====
+training LSTM across 3 seeds...
+training static GNN across 3 seeds...
+training TGN-lite (point estimate) across 3 seeds...
+LSTM pool: 2610 pairs, 44 positive (6+6 scenarios, STEP=0:02:00)
+GNN pool:  2610 pairs, 44 positive (same pair population as LSTM)
+TGN-lite pool: 3915 pairs, 45 positive (3 seeds x 3 test scenarios, trained on all 6 train scenarios, STEP=0:05:00 -- coarser step AND smaller test set than LSTM/GNN)
+model                        AP (mean [min-max])   precision    recall  accuracy
+LSTM                           0.756 [0.66-0.84]       0.760     0.864     0.993
+static GNN                     0.183 [0.17-0.19]       0.162     0.773     0.929
+TGN-lite                       0.246 [0.18-0.31]       0.047     0.711     0.833
+training TGN-lite WITH uncertainty head (Beta-NLL) across 3 seeds...
+TGN-lite (point estimate):    AP 0.246 [0.18-0.31]
+TGN-lite (uncertainty-aware): AP 0.014 [0.01-0.02], ECE 0.3344

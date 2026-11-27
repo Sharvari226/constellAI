@@ -1,0 +1,1201 @@
+diff --git a/.gitignore b/.gitignore
+index 119baae..44ec997 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -16,3 +16,7 @@ outputs/m4_scaled/*.pt
+ 
+ # raw external data (not redistributed)
+ data/
++
++# coverage output
++.coverage
++htmlcov/
+diff --git a/README.md b/README.md
+index 428d2bc..e09a409 100644
+--- a/README.md
++++ b/README.md
+@@ -1,831 +1,264 @@
+-<div align="center">
+-
+ # ConstellAI
+ 
+-**Anticipatory, physics-informed orbital intelligence for space traffic management**
++**Forecast-conditioned, fuel-aware maneuver triggers for satellite constellations under uncertain tracks.**
+ 
+-[![Status](https://img.shields.io/badge/status-active%20development-yellow)]()
+-[![Tests](https://img.shields.io/badge/tests-125%2F125%20passing-brightgreen)]()
+-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
+-[![License](https://img.shields.io/badge/license-TBD-lightgrey)]()
++Research code and experimental record for a B.Tech capstone. Everything below was read from the source, tests and result files in this repository; items that are not verified are marked **[unverified]**, and anything not done is marked **pending**.
+ 
+-</div>
++Status tags: **done** = implemented and exercised by tests or recorded runs; **partial** = implemented, not fully evaluated; **pending** = not done.
+ 
+ ---
+ 
+-## Table of Contents
+-
+-- [What This Is](#what-this-is)
+-- [The Novelty Claim, Precisely](#the-novelty-claim-precisely)
+-- [Build Status](#build-status)
+-- [Architecture](#architecture)
+-- [How Each Stage Works, In Detail](#how-each-stage-works-in-detail)
+-- [Why Each Design Choice Is Defensible](#why-each-design-choice-is-defensible)
+-- [Repository Structure](#repository-structure)
+-- [Getting Started](#getting-started)
+-- [Testing](#testing)
+-- [Roadmap](#roadmap)
+-- [Baseline & Ablation Ladders](#baseline--ablation-ladders)
+-- [What This Project Never Claims](#what-this-project-never-claims)
+-- [Team](#team)
+-- [License](#license)
++## 1. Overview
+ 
+----
++**Problem.** Close approaches between satellites are growing faster than operators can triage them. Given noisy tracks of a threatening object, *when* should a satellite maneuver, and does a better risk signal reduce the fuel (Δv) needed to stay safe?
+ 
+-## What This Is
+-
+-Growing satellite constellations are increasing close-approach ("conjunction") events
+-faster than current space traffic management practice can absorb. This is not
+-fundamentally a lack-of-prediction problem — operational literature on the subject
+-consistently identifies the actual bottleneck as **operator alert workload**: as
+-constellations scale, the number of "these two satellites might collide" alerts grows
+-faster than humans can triage them.
+-
+-ConstellAI addresses this with a three-part pipeline:
+-
+-1. A **continuous-time temporal graph neural network** forecasts conjunctions multiple
+-   days ahead, with **calibrated uncertainty** rather than a flat point estimate.
+-2. A **constrained multi-agent reinforcement learning** policy plans coordinated,
+-   fuel-optimal avoidance maneuvers ahead of time — treating "don't collide" as a
+-   **hard safety constraint**, not a soft reward penalty.
+-3. A **physics-based safety filter** provides a final, real-time backstop before any
+-   maneuver actually executes.
+-
+-Every module is built on top of authoritative orbital mechanics — the machine learning
+-components augment prediction, prioritization, and coordination; they never override
+-physics.
+-
+-## The Novelty Claim, Precisely
+-
+-It is important to state this narrowly and honestly, because a broader claim doesn't
+-survive contact with the existing literature.
+-
+-**Not the claim:** "TGNN + MARL for space traffic management" — this combination, and
+-even *scalable graph-based safety control* specifically, is already active, published
+-work. **GCBF+** (Zhang et al., IEEE Transactions on Robotics, 2025) provides a
+-GNN-parameterized control barrier function with a *formal safety proof*, scaling to
+-1000+ agents — a stronger, more general version of what an early draft of this project
+-proposed as its safety-layer contribution. GS-MARL (2026) and a 2025 paper on
+-communication-constrained MARL for satellite collision avoidance occupy adjacent
+-ground as well.
+-
+-**The actual claim:** existing scalable multi-agent safety systems (GCBF+, GS-MARL) are
+-**reactive** — they act on current relative state, in real time. ConstellAI's
+-contribution is **anticipatory, multi-day, uncertainty-calibrated forecasting** driving
+-safety-constrained coordination, so maneuvers get planned fuel-optimally *ahead of
+-time*, rather than forced reactively once risk is already imminent. This distinction is
+-argued explicitly, with citations, in the paper's related-work section — not assumed or
+-asserted around.
+-
+-## Build Status
+-
+-| Layer | Status | What "done" means here |
+-|---|---|---|
+-| **M1 — Orbital Mechanics Core** | ✅ Complete | TLE parsing, SGP4 propagation, validated against Vallado's published reference state vectors to floating-point tolerance — not an internal consistency check, an external ground-truth check |
+-| **Step 3 — Non-ML Baseline** | ✅ Complete | Exhaustive O(N²) conjunction screener; the number every model below has to beat, recorded before any ML exists to be tempted to tune toward it |
+-| **M2 — Sparse Dynamic Graph** | ✅ Complete | Coarse altitude-band filter + fine relative-dynamics screen, combined into one canonical `build_graph()` pipeline; false-negative gate *mechanism* verified correct (a real-constellation run to record the actual false-negative rate is the one remaining open item) |
+-| **M3 — Temporal Forecasting (TGNN)** | ✅ Complete | Continuous-time graph network + uncertainty head — in progress by the modeling team |
+-| **M4 — Constrained MARL** | ✅ Complete | CMDP-formulated coordination policy — in progress by the modeling team |
+-| **M5 — Safety Filter** | ✅ Complete | Planned as an explicit, cited comparison against GCBF+, not an independently "novel" mechanism |
+-| **M6 — Simulation & Evaluation** | 🔶 Partial | Baseline scenario tooling exists; full Monte Carlo evaluation harness (≥500 trials) pending |
+-| **M7 — Infra / MLOps** | ⬜ Not started | CI/CD, experiment tracking (MLflow/W&B), config-driven reproducibility |
++**Research question.** When does forecast quality (an uncertainty-aware, context-calibrated risk probability) reduce the Δv needed for risk-triggered maneuvers, and which calibration measure predicts it?
+ 
+-**Test suite: 46/46 passing.** Run `python -m pytest tests/ -v` to verify locally — see
+-[Testing](#testing) below.
++**Approach.** A controlled simulation: Hill–Clohessy–Wiltshire (HCW) relative motion, Kalman-filtered tracks, an analytic Monte Carlo forecaster, and a **trigger ladder**: policies that share one burn rule and differ only in the signal that triggers it. A frozen selection-and-evaluation protocol separates threshold selection from reporting.
+ 
+-## Architecture
++**What the project does not claim.** No formal safety guarantee; no new theory (the decision-theoretic results are applications of known ones); no fuel claim from real data; results are from synthetic straight-line-geometry scenarios.
+ 
+-```
+-TLE data (public orbital element sets)
+-   │
+-   ▼
+-M1  Orbit determination + SGP4 propagation
+-    Perturbations: J2 (Earth oblateness), atmospheric drag, solar radiation pressure
+-   │
+-   ▼
+-M2  Sparse dynamic graph construction
+-    Stage A — coarse filter:  altitude-band overlap (sweep-line, O(N log N))
+-    Stage B — fine screen:    TCA + miss distance + closing rate on survivors
+-   │
+-   ▼
+-M3  Continuous-time temporal graph network (TGNN)
+-    Per-satellite memory, updated on each graph event (not fixed time-slices)
+-    Point-process head → time-to-closest-approach
+-    Uncertainty head    → calibrated distribution, not a point estimate
+-    Output: P(collision), predicted TCA, calibrated uncertainty
+-   │
+-   ├──────────────────────────────────┐
+-   ▼                                  ▼
+-M4  Constrained Multi-Agent RL     (flags high-risk subgraph
+-    CMDP formulation:                 for M5, below)
+-      maximize  mission utility − fuel cost        │
+-      subject to  P(collision) ≤ ε                 │
+-    (a hard constraint, not a reward penalty)       │
+-   │                                                │
+-   ▼                                                ▼
+-Proposed maneuver ─────────────► M5  Physics-based safety filter (CBF/HOCBF-style)
+-                                      Real-time QP-based check
+-                                      Scoped ONLY to M3's flagged subgraph
+-                                      Explicitly compared against GCBF+
+-   │
+-   ▼
+-Execute, or apply minimal-deviation correction
+-
+-──────────────────────────────────────────────────────────────
+-Running throughout every stage:
+-  M6 — independent ground-truth simulator + Monte Carlo evaluation
+-  M7 — experiment tracking, CI/CD, reproducibility infrastructure
+-```
++## 2. Status
+ 
+-## How Each Stage Works, In Detail
+-
+-### M1 — Orbital Mechanics Core
+-
+-Satellites publish orbital state as **TLEs** (Two-Line Element sets) — six Keplerian
+-parameters plus drag terms, at a reference epoch. **SGP4** propagates this forward in
+-time, accounting for:
+-
+-- **J2 perturbation** — Earth's oblateness causes orbital precession; the single
+-  largest perturbation for most orbits.
+-- **Atmospheric drag** — significant in LEO, decays orbits over time, and is itself
+-  uncertain (density varies with solar activity).
+-- **Solar radiation pressure** — smaller effect, more relevant for high
+-  area-to-mass-ratio objects.
+-
+-This module is deliberately physics-only — no learning happens here, and nothing
+-downstream is ever allowed to override its output. If a machine-learned component ever
+-disagreed with SGP4 about where a satellite physically is, SGP4 wins. This is validated
+-against Vallado's published reference state vectors (`tests/physics_validation/`), not
+-merely checked for internal consistency.
+-
+-### M2 — Sparse Dynamic Graph
+-
+-Checking every satellite pair for risk is `O(N²)` — 45 pairs for 10 satellites, but
+-~500,000 for 1,000. This module reduces that cost in two stages, without silently
+-dropping real risks:
+-
+-**Stage A (coarse filter):** two satellites can only conjunct if their orbital altitude
+-ranges overlap — a satellite confined to 400–420 km can never approach one confined to
+-1000–1020 km, regardless of relative phase. This is a *necessary*, not sufficient,
+-condition: it can never produce a false negative, and it's fine if some false positives
+-pass through. Implemented as a sweep over satellites sorted by perigee altitude, so
+-each satellite only needs comparing against the *currently active* set, not every other
+-satellite.
+-
+-**Stage B (fine screen):** on coarse-filter survivors, the actual relative dynamics are
+-checked — projected miss distance *and* closing rate, both required together. A pair
+-can be geometrically close but separating fast (not a risk); a pair can be far apart
+-but closing fast (a real risk). Raw distance alone can't distinguish these; this is
+-what "relative dynamics, not raw distance" concretely means in code.
+-
+-**The false-negative gate:** because Stage B's thresholds could, in principle, be set
+-wrong, this module includes a dedicated validation gate that runs the combined sparse
+-graph against the exhaustive Step-3 baseline on the same scenario and reports exactly
+-what — if anything — the sparse graph missed, as a number, not an assumption. The gate
+-mechanism itself is verified (it correctly catches a deliberately introduced miss);
+-running it against a real, larger synthetic constellation to record the actual project
+-result is the next step.
+-
+-### M3 — Temporal Forecasting (TGNN)
+-
+-Rather than treating the constellation as fixed-interval snapshots (which loses
+-precision on exactly *when* a close approach happens — operationally meaningful down to
+-seconds/minutes), this module maintains a per-satellite memory vector that updates
+-continuously as new graph events occur, following the continuous-time temporal graph
+-network paradigm (in the style of TGN). Two prediction heads sit on top of that memory:
+-
+-- A **time-to-event head** (point-process style, following DyRep) predicting *when*
+-  closest approach will occur, not just whether it will.
+-- An **uncertainty head** (following Pinto et al.'s Bayesian approach to CDM sequence
+-  prediction) outputting a *calibrated distribution*, not a flat probability — because
+-  a collision-probability estimate from a multi-day-ahead propagation carries real,
+-  compounding uncertainty from TLE error, propagation error, and atmospheric drag
+-  uncertainty, and pretending otherwise misleads whatever consumes the forecast
+-  downstream.
+-
+-### M4 — Constrained Multi-Agent RL
+-
+-Each satellite is an RL agent balancing mission objectives against fuel cost — but
+-never allowed to trade safety away for either. Safety is formulated as a **Constrained
+-Markov Decision Process (CMDP)**:
++| Component | Status | Evidence |
++|---|---|---|
++| M1 orbital mechanics (TLE parsing, SGP4 wrapper, HCW) | done | 5 Vallado reference-state tests (`tests/physics_validation`), plus unit tests |
++| M2 sparse graph and false-negative gate | done | 0 misses out of 7 baseline-flagged conjunctions over 5 seeds on one tight synthetic shell (`run_false_negative_gate.py`, run in the audit); real-catalog run pending |
++| Tracking (Kalman filter, tracked environment) | done | 19 tests; NEES recorded (§8.1) |
++| Event labels and analytic forecaster | done | 12 tests; Brier skill recorded (§8.2) |
++| Trigger ladder, evaluation harness | done | tests plus recorded runs |
++| Frozen protocol, final stream 7 | done, run once | `frozen_thresholds.json`, `results/final_stream7_report.*` |
++| Calibration–regret analysis | partial | global logit-affine distortions only; high-L rows clamped (§8.5) |
++| ESA CDM retrospective study | done (author's machine) | `results/esa_*`; data not redistributed, so not reproducible from this repo |
++| M3 forecasting baselines (LSTM, static GNN, TGN-lite) | partial | scripts and tests exist; a 3–6-scenario pilot, no ranking supported; not the planning forecaster |
++| M4 MARL (single-agent, IPPO, MAPPO, MADDPG, constrained MAPPO) | partial | secondary arm, negative result (§8.6) |
++| M5 safety filter (HOCBF, multi-threat) | partial | implemented with unit tests; **not audited**, no safety claim |
++| Space-Track client | partial | offline tests only; never run live; used in no result |
++| CI / experiment tracking (M7) | pending | no CI configuration in the repository |
++| Learned CDM-sequence forecaster, noise-mismatch, matched homogeneous-σ control, F400/F200 evaluation | pending | listed as future work (§10) |
+ 
+-```
+-maximize    mission utility − fuel cost
+-subject to  P(collision) ≤ ε   for every flagged risky pair
+-```
++## 3. Methodology
+ 
+-This is deliberate, not incidental: reward-penalty formulations for safety are a
+-documented failure mode in the constrained-RL literature this project is built on — a
+-fixed penalty coefficient causes policies to either ignore safety (small penalty) or
+-abandon the mission entirely (large penalty), with no stable middle ground, because a
+-fixed penalty can't adapt to how close the current policy is to violating the
+-constraint. The baseline ladder (below) keeps the reward-penalty approach as an
+-explicit comparison point rather than discarding it silently — showing the constrained
+-formulation is better, not just asserting it.
+-
+-### M5 — Physics Safety Filter
+-
+-A final, real-time check — in the style of a **Control Barrier Function (CBF)** —
+-verifies a proposed maneuver keeps the satellite within a mathematically defined safe
+-set, applying the minimal necessary correction if it doesn't (solved as a small
+-quadratic program). This is explicitly **not** claimed as independently novel: GCBF+
+-already provides a stronger, formally-proven version of graph-based scalable safety
+-filtering. This module's actual job is to adapt that approach to real orbital dynamics
+-and benchmark directly against it, scoped only to the satellites M3 flags as high-risk
+-— which is what keeps it computationally tractable at constellation scale, distinct
+-from applying an equivalent check exhaustively.
+-
+-### M6 — Simulation & Evaluation / M7 — Infrastructure
+-
+-An independently built ground-truth simulator — deliberately owned separately from the
+-modeling pipeline it evaluates, so the two can never quietly drift apart — generates
+-test scenarios and runs large-scale Monte Carlo evaluation. Every experiment result is
+-tied to a specific configuration and code version, so reported numbers are
+-reproducible, not anecdotal.
+-
+-## Why Each Design Choice Is Defensible
+-
+-| Choice | Why, specifically |
+-|---|---|
+-| Physics never overridden by learning | Non-negotiable for aerospace-reviewer credibility |
+-| Two-stage sparse graph, not exhaustive | Exhaustive pairwise checking is `O(N²)` — a documented scaling wall in the closest comparable published safety system (Parikh et al.'s CBF-based satellite servicing paper) |
+-| Coarse filter uses altitude bands specifically | A *necessary* (not sufficient) condition — guarantees no false negatives at the coarse stage by construction |
+-| Continuous-time TGNN, not snapshot-based | Conjunction timing precision matters operationally; fixed-interval binning loses it |
+-| Calibrated uncertainty, not a point estimate | Point-estimate forecasting is already behind the accepted standard in this literature (Pinto et al.) |
+-| Safety as a CMDP constraint, not a reward penalty | Reward-penalty safety is a documented, citable anti-pattern, not a stylistic choice |
+-| Safety filter scoped to the flagged subgraph | Keeps M5 tractable at scale, avoiding the `O(N²)` wall even GCBF+-style approaches face without this scoping |
+-| Safety filter explicitly benchmarked against GCBF+ | Intellectual honesty — this module adapts and compares, it does not originate the mechanism |
++### 3.1 Scenarios (`constellai/evaluation/scenarios.py`, `ScenarioConfig`)
+ 
+-## Repository Structure
++3 agents; dt = 10 s; collision radius 50 m; max thrust 0.01 m/s²; up to 200 steps; 15% of agents on a zero-thrust collision course (miss ≤ 0.8·50 m), others pass at 1.5–4 collision radii; approach speed 0.3–1.0 m/s; warning time to closest approach: preset `short` = 150–600 s (main), `long` = 500–1500 s (`warning_config`). Δv is `Σ‖thrust‖·dt` in m/s, per agent, averaged over all agents including unthreatened ones.
+ 
+-```
+-constellai/
+-├── pyproject.toml
+-├── constellai/
+-│   ├── common/
+-│   │   └── constants.py            # every physical constant, cited, single source of truth
+-│   ├── orbital_mechanics/
+-│   │   ├── tle.py                  # TLE parsing (2-line and 3-line formats)
+-│   │   ├── propagation.py          # SGP4 wrapper; inclusive-start/exclusive-end sampling
+-│   │   ├── conjunction.py          # TCA + miss distance + closing rate from a state pair
+-│   │   ├── regime.py               # altitude-band computation
+-│   │   └── synthetic.py            # controlled-altitude satellite generation via sgp4init
+-│   ├── graph/
+-│   │   ├── filters.py              # coarse altitude-band filter (sweep-line)
+-│   │   ├── screening.py            # fine relative-dynamics screen
+-│   │   ├── build.py                # combined M2 pipeline (single canonical graph builder)
+-│   │   └── validation.py           # false-negative gate
+-│   ├── simulation/
+-│   │   └── baseline.py             # Step-3 exhaustive non-ML baseline
+-│   ├── models/
+-│   │   ├── tgnn/                   # M3 — continuous-time forecasting (in progress)
+-│   │   └── marl/                   # M4 — constrained multi-agent RL (in progress)
+-│   └── safety/                     # M5 — not yet started
+-└── tests/
+-    ├── unit/                       # one file per module above
+-    ├── physics_validation/         # the M1 hard gate — Vallado reference vectors
+-    └── integration/                # not yet populated
+-```
++### 3.2 Tracking and forecasting
+ 
+-## Getting Started
++- `tracking/kalman.py`: `hcw_transition`, `PairFilter` (one filter per ego–threat pair, position-only measurements, isotropic σ_p).
++- `tracking/tracker.py`: `TrackedMultiAgentEnv` replaces exact-state observations with filtered tracks. The main experiments **assume cooperative thrust broadcast** between agents (§8.1).
++- `forecasting/events.py`: `FirstEntryEngine` and `cumulative_labels` (ground-truth events), `AnalyticForecaster` (samples the filter posterior N(μ, P), propagates with HCW, reports first-passage frequencies with common random numbers; optional σ-gate). Horizons `HORIZONS_S = (100, 200, 400, 600)` s; horizon index 3 = 600 s, 2 = 400 s, 1 = 200 s.
++- **Heterogeneous track quality:** `--sigma-choices 5 50` draws per-pair σ_p from {5, 50} m. In outputs this mixture is labelled `sigma_p = 25`.
+ 
+-**Prerequisites:** Python 3.11+, Git.
++### 3.3 Trigger ladder (`evaluation/triggers.py`, `evaluation/heuristic.py`)
+ 
+-```bash
+-git clone https://github.com/Sharvari226/constellAI.git
+-cd constellAI/constellai
++All arms burn at full thrust along `away_direction`, and stop when the trigger clears (no hysteresis).
+ 
+-python -m venv .venv
+-# Windows:
+-.venv\Scripts\activate
+-# macOS/Linux:
+-source .venv/bin/activate
++| Arm | Class | Trigger | Policy-name pattern |
++|---|---|---|---|
++| A0 | `DistanceTriggerPolicy` | current separation < D·r_c | `dist_D*` |
++| E | `ThresholdHeuristicPolicy` | straight-line miss < τ·r_c | `heuristic_tau*` |
++| E_hcw | `HcwMissTriggerPolicy` | exact-HCW miss of the track mean < τ·r_c | `hcw_tau*` |
++| Ehcw_k | `HcwMarginTriggerPolicy` | HCW miss with a k·σ margin | `hcwm_k*` |
++| F600 / F400 / F200 | `ProbabilityTriggerPolicy` | forecast P(entry within H) ≥ p* | `prob_analytic_p*_h{3,2,1}` |
++| B | `ProbabilityTriggerPolicy` (oracle) | exact event indicator | `prob_oracle_p0.5_h3` |
+ 
+-pip install -e ".[dev]"
+-```
++Threshold grids (`run_ladder.py`, `FAMILIES`): A0 D ∈ {2, 4, 8, 16} (+ A02 {2.5, 3, 3.5}); E τ ∈ {1.2, 1.5, 2, 3, 5} (+ E2 {0.9, 1.0, 1.05, 1.1}); E3 (E_hcw) τ ∈ {0.9, 1.0, 1.05, 1.1, 1.2, 1.5, 2}; HM (Ehcw_k) k ∈ {0, 0.5, 1, 1.5, 2, 3, 4}; F (h3) p* ∈ {0.02, 0.05, 0.1, 0.2, 0.4} + F2 {0.03, 0.07, 0.15, 0.3}; FH2 (h2) and FH1 (h1) p* ∈ {0.03, 0.07, 0.15, 0.3, 0.5}; FC (h3, low thresholds) {0.001 … 0.5}; B p* = 0.5.
+ 
+-Verify the install:
++### 3.4 Protocol (`evaluation/scenarios.py`, stream constants)
+ 
+-```bash
+-python -m pytest tests/ -v
+-```
++Stream 1 policy training; 2 legacy reference policies (already used); 3 forecaster training; **4 validation**; 5 calibration; **6 development/reporting**; **7 final**. Per family, the threshold with minimum validation Δv subject to validation collision-free ≥ 0.98 is chosen (`select_and_compare.choose`, requires a matching stream-6 run). Reporting uses Wilson intervals for rates (`evaluation/stats.py`) and a **paired bootstrap over scenarios** (trial *i* is the same scenario and noise realisation for every policy). The bootstrap holds the selected thresholds fixed, so it understates selection noise. The final evaluation (`freeze_final.py --execute`) refuses to run unless `frozen_thresholds.json` is committed and clean, and refuses a second run.
+ 
+-Expected: **46 passed**.
++### 3.5 Decision-theoretic framing
+ 
+-## Testing
++One-shot cost model: a burn costs c_b, an unprevented event costs L, p* = c_b/L. P1 Bayes ordering; P2 invariance of the threshold frontier under global monotone recalibration; P3 non-invariance under context-dependent calibration; P4 threshold-local regret; P5 value of waiting. These are applications of known results; P4 and the citations are still to be checked (`theory.tex`, kept outside this repository so far).
+ 
+-| Suite | Location | What it checks |
+-|---|---|---|
+-| Physics validation | `tests/physics_validation/` | Propagator output matches Vallado's published reference vectors exactly (to floating-point tolerance) — the M1 hard gate |
+-| Unit — orbital mechanics | `tests/unit/test_tle.py`, `test_propagation.py`*, `test_conjunction.py`, `test_regime.py`, `test_synthetic.py` | Parsing, propagation contracts, conjunction geometry, altitude bands |
+-| Unit — graph | `tests/unit/test_filters.py`, `test_screening.py`, `test_build.py`, `test_validation.py` | Coarse filter correctness and pruning behavior, fine-screen edge inclusion, combined pipeline, false-negative gate mechanism |
+-| Unit — baseline | `tests/unit/test_baseline.py` | Exhaustive O(N²) screening correctness |
+-
+-<sub>*If `test_propagation.py` doesn't exist yet as a standalone file in your checkout,
+-propagation is covered indirectly through `test_physics_validation` and every other
+-module that depends on it — worth adding a dedicated one.</sub>
++## 4. Architecture and repository structure
+ 
+-Run everything:
+-
+-```bash
+-python -m pytest tests/ -v
+ ```
+-
+-Run one layer at a time during development:
+-
+-```bash
+-python -m pytest tests/physics_validation/ -v   # the M1 gate specifically
+-python -m pytest tests/unit/test_build.py -v     # the combined M2 pipeline specifically
++constellai/
++  common/constants.py            physical constants
++  orbital_mechanics/             tle, propagation (SGP4 wrapper), relative_motion (HCW), conjunction,
++                                 regime, synthetic, fetch (CelesTrak), spacetrack (Space-Track client)
++  graph/                         filters (coarse altitude-band), screening, build (build_graph), validation (false-negative gate)
++  simulation/baseline.py         exhaustive non-ML conjunction screening (run_baseline)
++  tracking/                      kalman.py (PairFilter), tracker.py (TrackedMultiAgentEnv)
++  forecasting/events.py          FirstEntryEngine, AnalyticForecaster, labels
++  evaluation/                    scenarios, trials (run_trial, run_trials, summarize_trials), triggers, heuristic,
++                                 scaled_env, envs (make_env), policies, stats, monte_carlo, gain_sweep, tiers, nonlinear_env
++  models/marl/                   environment, multi_agent_environment, objective (PIDLagrange), constrained_mappo, mappo,
++                                 ippo, maddpg, single_agent_baseline, checkpoint, joint_obs, forecast_augmented_environment
++  models/tgnn/                   tgn_lite, lstm_baseline, gnn_baseline, dataset, dynamic_graph, graph_dataset, risk_adapter
++  safety/                        cbf_filter, multi_threat_filter, filtered_environment
++  scripts/                       experiment and analysis entry points (§6)
++tests/unit/  tests/physics_validation/
++results/                         paper-facing tables and logs (tracked)
++outputs/                         m4, m4_scaled, m6, demo, visualizations (tracked); ladder and stream 7 raw outputs are NOT tracked
++visualization/generate_figures.py
++frozen_thresholds.json           thresholds frozen before the stream 7 run
+ ```
+ 
+-## Roadmap
+-
+-- [x] **Step 0** — Environment & repo setup
+-- [x] **Step 1** — Literature review: STM motivation papers, MARL literature (MADDPG,
+-      QMIX, COMA, MAPPO), TGNN architectures (TGN, EvolveGCN, TGAT, JODIE, DyRep, DySAT,
+-      CAW), Safe RL / constrained-optimization literature (CPO, a SafeRL/SafeMARL
+-      survey, a CBF-based satellite-servicing paper) — plus competitive positioning
+-      against GCBF+, GS-MARL, and a 2025 satellite-MARL paper
+-- [x] **Step 2** — M1: propagator validated against Vallado test vectors; independent
+-      simulator baseline
+-- [x] **Step 3** — Non-ML baseline
+-- [x] **Step 4** — M2: sparse graph construction; false-negative gate mechanism
+-      verified (real-constellation run to record the actual rate is the remaining
+-      open item)
+-- [ ] **Step 5** — M3: temporal forecasting (near complete)
+-- [ ] **Step 6** — M4: constrained MARL baseline ladder (near complete)
+-- [ ] **Step 7** — M5: safety filter, explicit comparison against GCBF+
+-- [ ] **Step 8** — Integration: M3 → M4 → M5, end-to-end on a multi-day scenario
+-- [ ] **Step 9** — Scalability analysis (N = 10 → 1000+), full ablations, Monte Carlo
+-      evaluation (≥500 trials)
+-- [ ] **Step 10** — Paper draft, mentor red-team review, capstone demonstration
+-
+-## Baseline & Ablation Ladders
+-
+-**M3 (forecasting) — three-way comparison:**
+-1. Non-ML distance-threshold baseline (no learning)
+-2. Plain per-satellite LSTM (learning, no graph structure)
+-3. Full continuous-time TGNN + uncertainty head (proposed)
+-
+-**M4 (coordination) — five-way comparison:**
+-1. Single-agent RL, no coordination
+-2. IPPO (independent learning, no shared information)
+-3. MAPPO + reward penalty (the original project plan — kept as the baseline it turned out to be)
+-4. MADDPG (continuous-action comparison)
+-5. Constrained/Lagrangian formulation (the proposed method)
+-
+-**Key ablations:**
+-- Uncertainty head on/off — does calibrated uncertainty measurably reduce the downstream policy's constraint-violation rate?
+-- Safety filter on/off — does M5 add anything beyond constrained RL alone?
+-- Sparse graph vs. exhaustive pairwise — the false-negative rate; load-bearing for the entire efficiency claim
+-- Reward-penalty vs. constrained MARL — reproduces the constrained-optimization literature's own fixed-penalty comparison, in this domain
+-- ConstellAI's safety filter vs. GCBF+ directly, on identical scenarios
+-
+-## What This Project Never Claims
+-
+-- **Not** "guaranteed safety" — report empirical Monte Carlo success rate, the same way the closest published comparable systems report theirs.
+-- **Not** "a novel scalable safety mechanism" — GCBF+ already published a stronger, formally-proven version; ConstellAI adapts and compares.
+-- **Not** "scales to thousands of satellites" without the Step 9 scaling curve to back it, benchmarked against GCBF+'s own published numbers.
+-- **Not** "no information loss from graph sparsity" without the false-negative gate's actual measured rate attached.
+-
+-## Team
++Key scripts: `run_ladder.py` (resumable ladder runner, `done.txt` per job), `evaluate_tracked.py` (evaluates reference and trigger policies; `--val` stream 4, default stream 6, `--final` stream 7), `select_and_compare.py`, `freeze_final.py`, `report_final.py`, `make_figures.py`, `make_final_figure.py`, `analyze_calibration_regret.py`, `profile_esa_cdm.py`, `esa_study.py`, `esa_followup.py`, `make_esa_figures.py`, `reference_baselines.py`, `check_track_consistency.py`, `check_forecast_calibration.py`, `train_tracked.py`, `run_pilot.py`, `analyze_pilot.py` (RL arms only), `run_false_negative_gate.py`, plus M3 training scripts.
+ 
+-| Role | Focus |
+-|---|---|
+-| Dev A + Dev B | M1 (orbital mechanics) + M6 (simulation & evaluation) |
+-| Dev C | M2 (sparse graph) + M3 (temporal forecasting) |
+-| Dev D | M4 (constrained MARL), solo |
+-| Mentor + Dev D | M5 (safety filter), paired |
+-<div align="center">
++## 5. Data
+ 
+-# ConstellAI
++- **Synthetic scenarios:** generated on the fly (`sample_scenario`, deterministic per `(stream, seed, index)`). No external data.
++- **TLE ingestion:** `fetch_celestrak_*` (live CelesTrak, tests marked `network`); `fetch_spacetrack_*` (needs `SPACETRACK_USERNAME` and `SPACETRACK_PASSWORD`; never run live).
++- **ESA Collision Avoidance Challenge (Kelvins) CDM data:** not redistributed (`data/` is gitignored). Expected layout used by the scripts: `data/esa_cdm/train/train_data.csv` and `data/esa_cdm/Collision Avoidance Challenge - Dataset/kelvins_competition_data/{test_data.csv, test_data_private.csv}`. Profile (author's machine): train 13,154 events / 162,634 CDMs; test 2,167 events. The dataset text defines the target as the final CDM's risk; the high-risk threshold log10 risk > −6 is the competition convention **[unverified: not in the dataset text]**.
+ 
+-**Anticipatory, physics-informed orbital intelligence for space traffic management**
++## 6. Installation and commands
+ 
+-[![Status](https://img.shields.io/badge/status-active%20development-yellow)]()
+-[![Tests](https://img.shields.io/badge/tests-63%2F63%20passing-brightgreen)]()
+-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
+-[![License](https://img.shields.io/badge/license-TBD-lightgrey)]()
++Python ≥ 3.11 (author: 3.13 on Windows; audit: 3.12.3 on Linux). Dependencies: `sgp4`, `numpy`, `torch`, `scipy`, `matplotlib`; extras `dev` (pytest, pytest-cov) and `esa` (pandas, scikit-learn).
+ 
+-</div>
++```powershell
++git clone https://github.com/Sharvari226/constellAI
++cd constellAI
++git switch feat/noisy-tracks
++python -m venv .venv
++.venv\Scripts\Activate.ps1
++pip install -e ".[dev,esa]"
++$env:PYTHONPATH = (Get-Location).Path
++```
+ 
+----
++(bash: `source .venv/bin/activate; export PYTHONPATH=$PWD`.)
+ 
+-## Table of Contents
+-
+-- [What This Is](#what-this-is)
+-- [The Novelty Claim, Precisely](#the-novelty-claim-precisely)
+-- [Build Status](#build-status)
+-- [Architecture](#architecture)
+-- [How Each Stage Works, In Detail](#how-each-stage-works-in-detail)
+-- [Why Each Design Choice Is Defensible](#why-each-design-choice-is-defensible)
+-- [Repository Structure](#repository-structure)
+-- [Getting Started](#getting-started)
+-- [Running the Current Components](#running-the-current-components)
+-- [Testing](#testing)
+-- [Roadmap](#roadmap)
+-- [Baseline & Ablation Ladders](#baseline--ablation-ladders)
+-- [What This Project Never Claims](#what-this-project-never-claims)
+-- [Team](#team)
+-- [License](#license)
+-
+-> **Current snapshot (`20dad4d`):** This repository does not yet provide one end-to-end application command. M1 orbital mechanics, M2 graph screening, M3 forecasting scripts, and an M4 single-agent foundation are present as separate components. The architecture below describes the intended system, not an integrated run; M5 is not implemented in this snapshot. Current experiments use synthetic scenarios. The visualization branch keeps the known M3 timestep and test-population differences unchanged.
++```powershell
++# tests (add -m "not network" offline)
++python -m pytest -q -m "not network"
++
++# trigger ladder, heterogeneous mixture, n = 100 per policy (job names match outputs/ladder_het;
++# the exact original flags, e.g. --mc-gate, were not recorded)
++python constellai/scripts/run_ladder.py --sigmas 25 --sigma-choices 5 50 --families A0 E E3 HM F F2 B --trials 100 --preset short --workers 4 --out-root outputs/ladder_het
++
++# select on stream 4, report on stream 6
++python constellai/scripts/select_and_compare.py --root outputs/ladder_het --target 0.98 --boot 2000
++python constellai/scripts/make_figures.py --root outputs/ladder_het --sigma 25
++
++# freeze (dry run, then write and COMMIT), then the one-time stream 7 run and report
++python constellai/scripts/freeze_final.py --root outputs/ladder_het --trials 300 --expect-jobs 14
++python constellai/scripts/freeze_final.py --root outputs/ladder_het --trials 300 --expect-jobs 14 --write
++git add frozen_thresholds.json; git commit -m "Freeze thresholds"
++python constellai/scripts/freeze_final.py --root outputs/ladder_het --trials 300 --expect-jobs 14 --mc-gate 6 --execute
++python constellai/scripts/report_final.py
++python constellai/scripts/make_final_figure.py
++
++# calibration-regret analysis
++python constellai/scripts/analyze_calibration_regret.py --root outputs/ladder_het --sigmas 25 --nominal cost
++python constellai/scripts/analyze_calibration_regret.py --root outputs/ladder_het --sigmas 25 --nominal opt
++
++# ESA study (needs the data under data/esa_cdm)
++python constellai/scripts/profile_esa_cdm.py --train <train_data.csv> --test <test_data.csv> --private <test_data_private.csv>
++python constellai/scripts/esa_study.py    --train <train_data.csv> --test <test_data.csv> --private <test_data_private.csv>
++python constellai/scripts/esa_followup.py --train <train_data.csv> --test <test_data.csv> --private <test_data_private.csv>
++python constellai/scripts/make_esa_figures.py
++```
+ 
+----
++Do not run `--execute` again: stream 7 is spent, and any rerun must be labelled post hoc.
+ 
+-## What This Is
+-
+-Growing satellite constellations are increasing close-approach ("conjunction") events
+-faster than current space traffic management practice can absorb. This is not
+-fundamentally a lack-of-prediction problem — operational literature on the subject
+-consistently identifies the actual bottleneck as **operator alert workload**: as
+-constellations scale, the number of "these two satellites might collide" alerts grows
+-faster than humans can triage them.
+-
+-ConstellAI addresses this with a three-part pipeline:
+-
+-1. A **continuous-time temporal graph neural network** forecasts conjunctions multiple
+-   days ahead, with **calibrated uncertainty** rather than a flat point estimate.
+-2. A **constrained multi-agent reinforcement learning** policy plans coordinated,
+-   fuel-optimal avoidance maneuvers ahead of time — treating "don't collide" as a
+-   **hard safety constraint**, not a soft reward penalty.
+-3. A **physics-based safety filter** provides a final, real-time backstop before any
+-   maneuver actually executes.
+-
+-Every module is built on top of authoritative orbital mechanics — the machine learning
+-components augment prediction, prioritization, and coordination; they never override
+-physics.
+-
+-## The Novelty Claim, Precisely
+-
+-It is important to state this narrowly and honestly, because a broader claim doesn't
+-survive contact with the existing literature.
+-
+-**Not the claim:** "TGNN + MARL for space traffic management" — this combination, and
+-even *scalable graph-based safety control* specifically, is already active, published
+-work. **GCBF+** (Zhang et al., IEEE Transactions on Robotics, 2025) provides a
+-GNN-parameterized control barrier function with a *formal safety proof*, scaling to
+-1000+ agents — a stronger, more general version of what an early draft of this project
+-proposed as its safety-layer contribution. GS-MARL (2026) and a 2025 paper on
+-communication-constrained MARL for satellite collision avoidance occupy adjacent
+-ground as well.
+-
+-**The actual claim:** existing scalable multi-agent safety systems (GCBF+, GS-MARL) are
+-**reactive** — they act on current relative state, in real time. ConstellAI's
+-contribution is **anticipatory, multi-day, uncertainty-calibrated forecasting** driving
+-safety-constrained coordination, so maneuvers get planned fuel-optimally *ahead of
+-time*, rather than forced reactively once risk is already imminent. This distinction is
+-argued explicitly, with citations, in the paper's related-work section — not assumed or
+-asserted around.
+-
+-## Build Status
+-
+-| Layer | Status | What "done" means here |
+-|---|---|---|
+-| **M1 — Orbital Mechanics Core** | ✅ Complete | TLE parsing, SGP4 propagation, validated against Vallado's published reference state vectors to floating-point tolerance — not an internal consistency check, an external ground-truth check |
+-| **Step 3 — Non-ML Baseline** | ✅ Complete | Exhaustive O(N²) conjunction screener; the number every model below has to beat, recorded before any ML exists to be tempted to tune toward it |
+-| **M2 — Sparse Dynamic Graph** | ✅ Implemented | Coarse altitude-band filter, fine relative-dynamics screen, and exhaustive-baseline false-negative gate; gate has been validated on synthetic scenarios |
+-| **M3 — Temporal Forecasting (TGNN)** | 🟡 Implemented experiments | LSTM, static GNN, and TGN-lite scripts are present. The baseline comparison uses synthetic scenarios, prints results to stdout, and has documented timestep/test-set differences. |
+-| **M4 — MARL** | 🧱 Foundation | Single-agent HCW environment and REINFORCE baseline are present; this snapshot does not contain an integrated constrained multi-agent controller. |
+-| **M5 — Safety Filter** | ⬜ Not implemented | No M5 safety-filter module is present in this stable snapshot. |
+-| **M6 — Simulation & Evaluation** | 🔶 Partial | Baseline scenario tooling exists; full Monte Carlo evaluation harness (≥500 trials) pending |
+-| **M7 — Infra / MLOps** | ⬜ Not started | CI/CD, experiment tracking (MLflow/W&B), config-driven reproducibility |
++## 7. Tests
+ 
+-**Test suite: 63/63 passing on the stable snapshot.** Run `python -m pytest tests/ -v` to verify locally — see
+-[Testing](#testing) below.
++Audit run (Linux, Python 3.12.3, numpy 2.5.4, scipy 1.18.1, torch 2.15.0, pytest 9.2.0, sandbox without network): **313 passed, 4 deselected (`network` marker)** in 304 s, with `pytest-cov` total **86%** for the `constellai` package (3,067 statements, 423 missed). Per-package coverage: common 100%, forecasting 100%, simulation 100%, tracking 99%, safety 99%, graph 97%, evaluation 96%, models 83%, orbital_mechanics 81%, scripts 59% (how many script files the report includes is **[unverified]**). A first run with the network tests included gave 305 passed, 3 failed (live CelesTrak fetch, no DNS in the sandbox), 1 skipped. On the author's machine (Windows, Python 3.13, network available) the suite gave **308 passed, 1 skipped** before 8 tests were added in the audit.
+ 
+-## Architecture
++Tests per file (offline): physics_validation/vallado_reference 5; unit: agent_collision 4, baseline 5, build 4, calibration 3, cbf_filter 6, checkpoint 7, conjunction 5, constrained_mappo 5, env_exposure 5, environment 9, envs 11, filtered_environment 3, filters 4, forecast_augmented_environment 4, forecast_events 12, gain_sweep 13, heuristic 6, ippo 5, kalman 8, maddpg 6, mappo 5, merge_results 2, monte_carlo 7, multi_agent_environment 6, multi_threat_filter 6, network_hooks 7, nonlinear_env 14, objective 8, objective_env 10, policies 16, regime 4, relative_motion 3, scaled_env 9, scenarios 7, screening 3, select_and_freeze 8, single_agent_baseline 5, spacetrack 3, stats 5, synthetic 4, tgn_memory_snapshot 2, tiers 5, tle 9, tracked_env 11, train_m4_ladder 8, trials 5, triggers 7, validation 4.
+ 
+-The following is the intended end-to-end architecture. Its later stages are not connected to a single executable pipeline in this snapshot.
++End-to-end checks run in the audit (not research results): a repeated 10-trial evaluation gave identical per-trial results; E `heuristic_tau1.2`, stream 6, n = 100, gave 0.970 [0.915, 0.990] and Δv 0.234, the same as the author's recorded Windows run; a miniature ladder (n = 10, streams 4 and 6 only) ran through selection, figures, the freeze dry run and the regret script. Stream 7 was never used in the audit.
+ 
+-```
+-TLE data (public orbital element sets)
+-   │
+-   ▼
+-M1  Orbit determination + SGP4 propagation
+-    Perturbations: J2 (Earth oblateness), atmospheric drag, solar radiation pressure
+-   │
+-   ▼
+-M2  Sparse dynamic graph construction
+-    Stage A — coarse filter:  altitude-band overlap (sweep-line, O(N log N))
+-    Stage B — fine screen:    TCA + miss distance + closing rate on survivors
+-   │
+-   ▼
+-M3  Continuous-time temporal graph network (TGNN)
+-    Per-satellite memory, updated on each graph event (not fixed time-slices)
+-    Point-process head → time-to-closest-approach
+-    Uncertainty head    → calibrated distribution, not a point estimate
+-    Output: P(collision), predicted TCA, calibrated uncertainty
+-   │
+-   ├──────────────────────────────────┐
+-   ▼                                  ▼
+-M4  Constrained Multi-Agent RL     (flags high-risk subgraph
+-    CMDP formulation:                 for M5, below)
+-      maximize  mission utility − fuel cost        │
+-      subject to  P(collision) ≤ ε                 │
+-    (a hard constraint, not a reward penalty)       │
+-   │                                                │
+-   ▼                                                ▼
+-Proposed maneuver ─────────────► M5  Physics-based safety filter (CBF/HOCBF-style)
+-                                      Real-time QP-based check
+-                                      Scoped ONLY to M3's flagged subgraph
+-                                      Explicitly compared against GCBF+
+-   │
+-   ▼
+-Execute, or apply minimal-deviation correction
+-
+-──────────────────────────────────────────────────────────────
+-Running throughout every stage:
+-  M6 — independent ground-truth simulator + Monte Carlo evaluation
+-  M7 — experiment tracking, CI/CD, reproducibility infrastructure
+-```
++## 8. Results
+ 
+-## How Each Stage Works, In Detail
+-
+-### M1 — Orbital Mechanics Core
+-
+-Satellites publish orbital state as **TLEs** (Two-Line Element sets) — six Keplerian
+-parameters plus drag terms, at a reference epoch. **SGP4** propagates this forward in
+-time, accounting for:
+-
+-- **J2 perturbation** — Earth's oblateness causes orbital precession; the single
+-  largest perturbation for most orbits.
+-- **Atmospheric drag** — significant in LEO, decays orbits over time, and is itself
+-  uncertain (density varies with solar activity).
+-- **Solar radiation pressure** — smaller effect, more relevant for high
+-  area-to-mass-ratio objects.
+-
+-This module is deliberately physics-only — no learning happens here, and nothing
+-downstream is ever allowed to override its output. If a machine-learned component ever
+-disagreed with SGP4 about where a satellite physically is, SGP4 wins. This is validated
+-against Vallado's published reference state vectors (`tests/physics_validation/`), not
+-merely checked for internal consistency.
+-
+-### M2 — Sparse Dynamic Graph
+-
+-Checking every satellite pair for risk is `O(N²)` — 45 pairs for 10 satellites, but
+-~500,000 for 1,000. This module reduces that cost in two stages, without silently
+-dropping real risks:
+-
+-**Stage A (coarse filter):** two satellites can only conjunct if their orbital altitude
+-ranges overlap — a satellite confined to 400–420 km can never approach one confined to
+-1000–1020 km, regardless of relative phase. This is a *necessary*, not sufficient,
+-condition: it can never produce a false negative, and it's fine if some false positives
+-pass through. Implemented as a sweep over satellites sorted by perigee altitude, so
+-each satellite only needs comparing against the *currently active* set, not every other
+-satellite.
+-
+-**Stage B (fine screen):** on coarse-filter survivors, the actual relative dynamics are
+-checked — projected miss distance *and* closing rate, both required together. A pair
+-can be geometrically close but separating fast (not a risk); a pair can be far apart
+-but closing fast (a real risk). Raw distance alone can't distinguish these; this is
+-what "relative dynamics, not raw distance" concretely means in code.
+-
+-**The false-negative gate:** because Stage B's thresholds could, in principle, be set
+-wrong, this module includes a dedicated validation gate that runs the combined sparse
+-graph against the exhaustive Step-3 baseline on the same scenario and reports exactly
+-what — if anything — the sparse graph missed, as a number, not an assumption. The gate
+-mechanism itself is verified (it correctly catches a deliberately introduced miss);
+-running it against a real, larger synthetic constellation to record the actual project
+-result is the next step.
+-
+-### M3 — Temporal Forecasting (TGNN)
+-
+-Rather than treating the constellation as fixed-interval snapshots (which loses
+-precision on exactly *when* a close approach happens — operationally meaningful down to
+-seconds/minutes), this module maintains a per-satellite memory vector that updates
+-continuously as new graph events occur, following the continuous-time temporal graph
+-network paradigm (in the style of TGN). Two prediction heads sit on top of that memory:
+-
+-- A **time-to-event head** (point-process style, following DyRep) predicting *when*
+-  closest approach will occur, not just whether it will.
+-- An **uncertainty head** (following Pinto et al.'s Bayesian approach to CDM sequence
+-  prediction) outputting a *calibrated distribution*, not a flat probability — because
+-  a collision-probability estimate from a multi-day-ahead propagation carries real,
+-  compounding uncertainty from TLE error, propagation error, and atmospheric drag
+-  uncertainty, and pretending otherwise misleads whatever consumes the forecast
+-  downstream.
+-
+-### M4 — Constrained Multi-Agent RL
+-
+-Each satellite is an RL agent balancing mission objectives against fuel cost — but
+-never allowed to trade safety away for either. Safety is formulated as a **Constrained
+-Markov Decision Process (CMDP)**:
++All Δv in m/s per agent. Sources: `results/` (tracked) and outputs that are not tracked (stated per table).
+ 
+-```
+-maximize    mission utility − fuel cost
+-subject to  P(collision) ≤ ε   for every flagged risky pair
+-```
++### 8.1 Tracking validity (NEES, target 6; 30 episodes, short preset, stream 4; recorded 10 Nov, not rerun)
+ 
+-This is deliberate, not incidental: reward-penalty formulations for safety are a
+-documented failure mode in the constrained-RL literature this project is built on — a
+-fixed penalty coefficient causes policies to either ignore safety (small penalty) or
+-abandon the mission entirely (large penalty), with no stable middle ground, because a
+-fixed penalty can't adapt to how close the current policy is to violating the
+-constraint. The baseline ladder (below) keeps the reward-penalty approach as an
+-explicit comparison point rather than discarding it silently — showing the constrained
+-formulation is better, not just asserting it.
+-
+-### M5 — Physics Safety Filter
+-
+-A final, real-time check — in the style of a **Control Barrier Function (CBF)** —
+-verifies a proposed maneuver keeps the satellite within a mathematically defined safe
+-set, applying the minimal necessary correction if it doesn't (solved as a small
+-quadratic program). This is explicitly **not** claimed as independently novel: GCBF+
+-already provides a stronger, formally-proven version of graph-based scalable safety
+-filtering. This module's actual job is to adapt that approach to real orbital dynamics
+-and benchmark directly against it, scoped only to the satellites M3 flags as high-risk
+-— which is what keeps it computationally tractable at constellation scale, distinct
+-from applying an equivalent check exhaustively.
+-
+-### M6 — Simulation & Evaluation / M7 — Infrastructure
+-
+-An independently built ground-truth simulator — deliberately owned separately from the
+-modeling pipeline it evaluates, so the two can never quietly drift apart — generates
+-test scenarios and runs large-scale Monte Carlo evaluation. Every experiment result is
+-tied to a specific configuration and code version, so reported numbers are
+-reproducible, not anecdotal.
+-
+-## Why Each Design Choice Is Defensible
+-
+-| Choice | Why, specifically |
+-|---|---|
+-| Physics never overridden by learning | Non-negotiable for aerospace-reviewer credibility |
+-| Two-stage sparse graph, not exhaustive | Exhaustive pairwise checking is `O(N²)` — a documented scaling wall in the closest comparable published safety system (Parikh et al.'s CBF-based satellite servicing paper) |
+-| Coarse filter uses altitude bands specifically | A *necessary* (not sufficient) condition — guarantees no false negatives at the coarse stage by construction |
+-| Continuous-time TGNN, not snapshot-based | Conjunction timing precision matters operationally; fixed-interval binning loses it |
+-| Calibrated uncertainty, not a point estimate | Point-estimate forecasting is already behind the accepted standard in this literature (Pinto et al.) |
+-| Safety as a CMDP constraint, not a reward penalty | Reward-penalty safety is a documented, citable anti-pattern, not a stylistic choice |
+-| Safety filter scoped to the flagged subgraph | Keeps M5 tractable at scale, avoiding the `O(N²)` wall even GCBF+-style approaches face without this scoping |
+-| Safety filter explicitly benchmarked against GCBF+ | Intellectual honesty — this module adapts and compares, it does not originate the mechanism |
++Without thrust broadcast and with all agents on a constant burn, the neighbour-pair NEES was 35.6 / 75.6 / 101.3 (σ_p = 5 / 25 / 50); with broadcast it was 5.69–5.86. Primary pair 5.95–6.09 throughout.
+ 
+-## Repository Structure
++### 8.2 Analytic forecast skill (stream 4, 20 episodes; recorded 10 Nov, not rerun)
+ 
+-```
+-constellai/
+-├── pyproject.toml
+-├── constellai/
+-│   ├── common/
+-│   │   └── constants.py            # every physical constant, cited, single source of truth
+-│   ├── orbital_mechanics/
+-│   │   ├── tle.py                  # TLE parsing (2-line and 3-line formats)
+-│   │   ├── propagation.py          # SGP4 wrapper; inclusive-start/exclusive-end sampling
+-│   │   ├── conjunction.py          # TCA + miss distance + closing rate from a state pair
+-│   │   ├── regime.py               # altitude-band computation
+-│   │   └── synthetic.py            # controlled-altitude satellite generation via sgp4init
+-│   ├── graph/
+-│   │   ├── filters.py              # coarse altitude-band filter (sweep-line)
+-│   │   ├── screening.py            # fine relative-dynamics screen
+-│   │   ├── build.py                # combined M2 pipeline (single canonical graph builder)
+-│   │   └── validation.py           # false-negative gate
+-│   ├── simulation/
+-│   │   └── baseline.py             # Step-3 exhaustive non-ML baseline
+-│   ├── models/
+-│   │   ├── tgnn/                   # M3 — continuous-time forecasting (in progress)
+-│   │   └── marl/                   # M4 — constrained multi-agent RL (in progress)
+-│   └── safety/                     # M5 — not yet started
+-└── tests/
+-    ├── unit/                       # one file per module above
+-    ├── physics_validation/         # the M1 hard gate — Vallado reference vectors
+-    └── integration/                # not yet populated
+-```
++Brier skill vs base rate at H = 100 / 200 / 400 / 600 s: σ_p = 5 m 0.996 / 0.970 / 0.896 / 0.790; 25 m 0.844 / 0.733 / 0.538 / 0.440; 50 m 0.584 / 0.483 / 0.319 / 0.257. ECE ≤ 0.015; 20 episodes make the calibration reading suggestive only.
+ 
+-## Getting Started
++### 8.3 Homogeneous ladder (n = 100, pilot level; `outputs/ladder1`, raw files not tracked; recorded 10 Nov)
+ 
+-**Prerequisites:** Python 3.11+, Git.
++| σ_p | A0 − E (Δv) | E − E_hcw | E_hcw − F | F − B |
++|---|---|---|---|---|
++| 5 m | +0.336 [0.276, 0.395] | +0.028 [0.014, 0.043] | +0.023 [0.015, 0.032] | +0.012 [0.003, 0.021] |
++| 25 m | +0.398 [0.333, 0.462] | +0.024 [0.006, 0.043] | +0.099 [0.078, 0.121] | +0.056 [0.033, 0.077] |
++| 50 m | +0.220 [0.161, 0.279] | +0.021 [−0.013, 0.055] | −0.017 [−0.049, 0.015] | +0.373 [0.337, 0.410] |
+ 
+-```bash
+-# From the repository root (the directory containing pyproject.toml)
+-python -m venv .venv
+-```
++At 25 m F was 3 points less safe than E_hcw on stream 6 (0.94 vs 0.97), so that comparison is not matched.
+ 
+-Activate the environment and install the package:
++### 8.4 Heterogeneous mixture {5, 50} m
+ 
+-```powershell
+-# Windows PowerShell
+-.venv\Scripts\Activate.ps1
+-python -m pip install -e ".[dev]"
+-```
++Selection (n = 100; `results/table_selection_sigma25.csv`): thresholds chosen on stream 4, reported on stream 6.
+ 
+-```bash
+-# macOS / Linux
+-source .venv/bin/activate
+-python -m pip install -e ".[dev]"
+-```
++| Arm | Policy | Val free / Δv | Stream 6 collision-free [95% CI] | Stream 6 Δv [95% CI] |
++|---|---|---|---|---|
++| A0 | dist_D4 | 1.000 / 1.140 | 1.000 [0.963, 1.000] | 1.124 [1.070, 1.181] |
++| E | heuristic_tau1.2 | 0.980 / 0.199 | 0.970 [0.915, 0.990] | 0.234 [0.202, 0.267] |
++| E_hcw | hcw_tau1.5 | 1.000 / 0.272 | 0.980 [0.930, 0.994] | 0.280 [0.249, 0.311] |
++| Ehcw_k | hcwm_k1 | 0.990 / 0.220 | 1.000 [0.963, 1.000] | 0.248 [0.218, 0.280] |
++| F600 | prob_analytic_p0.15_h3 | 0.980 / 0.171 | 1.000 [0.963, 1.000] | 0.180 [0.152, 0.208] |
++| B | prob_oracle_p0.5_h3 | 1.000 / 0.047 | 1.000 [0.963, 1.000] | 0.053 [0.038, 0.069] |
+ 
+-## Running the Current Components
++**Final evaluation, stream 7, run once** (n = 300 fresh scenarios, thresholds frozen in commit `8618a56`, `--mc-gate 6`; `results/final_stream7_report.*`):
+ 
+-Run commands from the repository root. There is no single command that runs M1 through M5 end-to-end in this snapshot. These commands run the available checks, experiments, and visualizations separately:
++| Arm | Collision-free [95% CI] | Δv [95% CI] |
++|---|---|---|
++| A0 | 1.000 [0.987, 1.000] | 1.150 [1.116, 1.187] |
++| E | **0.953 [0.923, 0.972]** | 0.218 [0.201, 0.235] |
++| E_hcw | 0.990 [0.971, 0.997] | 0.279 [0.260, 0.297] |
++| Ehcw_k | 0.990 [0.971, 0.997] | 0.242 [0.224, 0.260] |
++| F600 | 0.990 [0.971, 0.997] | 0.183 [0.167, 0.200] |
++| B | 1.000 [0.987, 1.000] | 0.047 [0.040, 0.055] |
+ 
+-```bash
+-# Verify the full test suite
+-python -m pytest tests/ -v
++Paired differences on stream 7 (first minus second): A0 − E +0.932 [0.899, 0.967]; E − E_hcw −0.061 [−0.076, −0.046] (E is less safe: −0.037 [−0.060, −0.017]); E_hcw − Ehcw_k +0.036 [0.027, 0.046] at identical safety; **Ehcw_k − F600 +0.059 [0.047, 0.071] at equal safety (0.990 both)**; E_hcw − F600 +0.096 [0.083, 0.108]; F600 − B +0.136 [0.122, 0.150].
+ 
+-# Run M2's existing five-seed synthetic false-negative gate
+-python -m constellai.scripts.run_false_negative_gate
++Against the pre-stated predictions: fixed-τ loses to margin (supported at matched safety); margin ≈ F (not supported: F600 is cheaper); F ≤ margin (supported).
+ 
+-# Train/evaluate the current M3 baseline comparison (prints metrics; can take a while)
+-python -m constellai.scripts.compare_baselines
++### 8.5 Calibration–regret analysis (`results/regret_het_*.txt`, n = 100, mixture, F600 family)
+ 
+-# Generate the stable-snapshot M2 and architecture figures
+-python -m visualization.generate_figures
+-```
++With p* = c_b/L (c_b = 0.33 m/s, an estimate): L = 3 (p* = 0.11, tuned optimum 0.2) regret of the nominally calibrated threshold +0.058 [0.023, 0.088]; L = 10 (p* = 0.033, tuned optimum 0.1) +0.221 [0.196, 0.250]. Rows marked "clamped" (all L ≥ 30 under the cost nominal) are lower bounds at the grid edge, and the L ≥ 30 rows under the tuned nominal have intervals up to +2.2; neither is interpretable. Global logit-affine distortions only.
+ 
+-The M3 comparison trains on the script's configured synthetic scenarios and prints metrics rather than saving a structured results file. Its TGN-lite timestep and test-scenario count differ from the LSTM/static-GNN comparison. The M4 code in this snapshot is a single-agent foundation without a dedicated end-to-end training CLI. M5 is not implemented here. The commands above therefore do not constitute one integrated operational pipeline.
++### 8.6 RL arm (recorded 10 Nov; `outputs/pilot1`, not tracked)
+ 
+-The figures generated by the last command and their sources/limitations are documented in [visualization/README.md](visualization/README.md).
++Short preset, σ_p = 25, 3 seeds × 300 episodes, n = 100: RL reactive 0.913 ± 0.038 collision-free at 19.75 ± 3.24 m/s; RL + oracle forecast 0.910 ± 0.044 at 23.68 ± 2.75 m/s; best rules 0.97–0.99 at 0.1–0.4 m/s (roughly 50–180× less fuel). Mission rewards scaled by 0.05 raised reward-critic explained variance from about 0 to 0.85 (single seed, in-sample).
+ 
+-For a single model script instead of the combined comparison, the available entry points include:
++### 8.7 ESA CDM retrospective study (`results/esa_followup.txt`, `results/regret_by_cut_signal_ratio.csv`, `results/context_by_covariance_tertile.csv`)
+ 
+-```bash
+-python -m constellai.scripts.train_lstm_baseline
+-python -m constellai.scripts.train_gnn_baseline
+-python -m constellai.scripts.train_tgn_lite
+-```
++Test events/positives at the 2/3/5-day cuts: 2,167/150, 2,045/138, 1,753/106; prevalence 2.7% (train) vs 6.9% (test). Cost model: a flag costs r, a miss costs 1; **no fuel claim**. Tuned threshold on ESA's own risk has lower regret than a tuned gradient-boosting model in 8 of 9 cut × r cells (e.g. 2 d, r = 0.05: −0.0107 [−0.0152, −0.0067]); the learned model adds nothing. S4 calibration ratio (mean p / prevalence) by chaser-covariance tertile: validation 0.83 / 0.89 / 1.08 (2 d); test prior-shift-corrected (diagnostic) 0.54 / 0.58 / 0.89 (2 d), 0.45 / 0.44 / 1.04 (3 d), 0.59 / 0.64 / 1.40 (5 d). Regret does not track that gradient consistently, so "which calibration measure predicts regret" is **inconclusive**. The ESA `risk` feature's untuned rows are artefacts (10^risk ≈ 0 flags nothing).
+ 
+-These separate training commands also use synthetic scenarios; they do not connect forecasting to MARL or a safety filter.
++### 8.8 Figure and table locations
+ 
+-## Testing
++`results/`: selection and paired tables (`table_*_sigma25.{csv,tex}`), stream 7 report, regret and ESA CSV/TXT. Generated by the scripts and not tracked: `outputs/figures/ladder_het/` (frontier, cost bars), `outputs/figures/final_stream7/`, `outputs/esa_study/figures/`. Tracked earlier figures: `outputs/visualizations/`, `outputs/demo/` (M1–M3 demonstrations; not re-checked in this audit).
+ 
+-| Suite | Location | What it checks |
+-|---|---|---|
+-| Physics validation | `tests/physics_validation/` | Propagator output matches Vallado's published reference vectors exactly (to floating-point tolerance) — the M1 hard gate |
+-| Unit — orbital mechanics | `tests/unit/test_tle.py`, `test_propagation.py`*, `test_conjunction.py`, `test_regime.py`, `test_synthetic.py` | Parsing, propagation contracts, conjunction geometry, altitude bands |
+-| Unit — graph | `tests/unit/test_filters.py`, `test_screening.py`, `test_build.py`, `test_validation.py` | Coarse filter correctness and pruning behavior, fine-screen edge inclusion, combined pipeline, false-negative gate mechanism |
+-| Unit — baseline | `tests/unit/test_baseline.py` | Exhaustive O(N²) screening correctness |
++## 9. Limitations and assumptions
+ 
+-<sub>*If `test_propagation.py` doesn't exist yet as a standalone file in your checkout,
+-propagation is covered indirectly through `test_physics_validation` and every other
+-module that depends on it — worth adding a dedicated one.</sub>
++- **Final thresholds were selected on 100 validation trials.** An n = 300 selection rerun was started and abandoned (1 of 18 jobs after about 9 h on the shared machine); no number from it is used.
++- **Stream 7 was run once.** It is spent; retuning on it is not allowed.
++- **E missed the 0.98 target** on stream 7 (0.953), so its cost advantage over E_hcw is not a matched comparison.
++- **One heterogeneity condition, no matched homogeneous-σ control:** "heterogeneity explains F's advantage" is a hypothesis.
++- **F400 and F200 were never in the frozen set;** there is no multi-horizon result. Earlier "infeasible" readings were a misleading script message (fixed in the audit).
++- **Cooperative thrust broadcast** is assumed; without it the filter is inconsistent under correlated burns.
++- **Straight-line, single-threat synthetic scenarios** favour straight-line rules; the burn rule is full-thrust with no hysteresis.
++- **The ESA study is retrospective;** the learned model is gradient boosting on last-CDM features, not a sequence model; the −6 label threshold is a convention.
++- **The M5 safety filter is unaudited,** the RL arm is a negative result, and the M3 pilot supports no model ranking.
++- **Reproducibility gaps:** raw ladder and stream 7 JSON files are not tracked; the ESA data is not redistributed; the exact original `--mc-gate` for `ladder_het` was not recorded; the audit ran on Linux/Python 3.12 while results were produced on Windows/Python 3.13 (one n = 100 policy reproduced exactly).
+ 
+-Run everything:
++## 10. Future scope
+ 
+-```bash
+-python -m pytest tests/ -v
+-```
++Matched homogeneous-σ control; F400/F200 at the frozen protocol and n ≥ 300 selection; FC low-threshold family to unclamp the regret rows; learned CDM-sequence forecaster on ESA data; context-dependent calibration experiments; noise-mismatch; harder scenario families (simultaneous threats, maneuvering threat); RL repair (bounded actions, fuel as objective); M5 audit; Space-Track history; CI.
+ 
+-Run one layer at a time during development:
++## 11. References (as used in the project notes; **[unverified]**: not re-checked against the sources)
+ 
+-```bash
+-python -m pytest tests/physics_validation/ -v   # the M1 gate specifically
+-python -m pytest tests/unit/test_build.py -v     # the combined M2 pipeline specifically
+-```
++Vallado, *Revisiting Spacetrack Report #3* (reference satellite #00005, used by `tests/physics_validation`); Markov Decision Processes for Satellite Maneuver Planning and Collision Avoidance (arXiv:2501.02667); Greco et al., robust Bayesian agent for collision avoidance manoeuvre planning (Strathclyde, 2021); ConstrainedZero (IJCAI 2024); Stooke et al., PID Lagrangian methods (ICML 2020); ESA Kelvins Collision Avoidance Challenge dataset (Zenodo) and Uriot et al., arXiv:2008.03069; decision-theory priors for the theory section (Schervish; Rothblum–Yona; Hu–Wu, FOCS 2024; Gopalan et al.; Kleinberg et al.; Zhao et al.) to be checked before citation.
+ 
+-## Roadmap
+-
+-- [x] **Step 0** — Environment & repo setup
+-- [x] **Step 1** — Literature review: STM motivation papers, MARL literature (MADDPG,
+-      QMIX, COMA, MAPPO), TGNN architectures (TGN, EvolveGCN, TGAT, JODIE, DyRep, DySAT,
+-      CAW), Safe RL / constrained-optimization literature (CPO, a SafeRL/SafeMARL
+-      survey, a CBF-based satellite-servicing paper) — plus competitive positioning
+-      against GCBF+, GS-MARL, and a 2025 satellite-MARL paper
+-- [x] **Step 2** — M1: propagator validated against Vallado test vectors; independent
+-      simulator baseline
+-- [x] **Step 3** — Non-ML baseline
+-- [x] **Step 4** — M2: sparse graph construction; false-negative gate mechanism
+-      verified (real-constellation run to record the actual rate is the remaining
+-      open item)
+-- [ ] **Step 5** — M3: temporal forecasting (near complete)
+-- [ ] **Step 6** — M4: constrained MARL baseline ladder (near complete)
+-- [ ] **Step 7** — M5: safety filter, explicit comparison against GCBF+
+-- [ ] **Step 8** — Integration: M3 → M4 → M5, end-to-end on a multi-day scenario
+-- [ ] **Step 9** — Scalability analysis (N = 10 → 1000+), full ablations, Monte Carlo
+-      evaluation (≥500 trials)
+-- [ ] **Step 10** — Paper draft, mentor red-team review, capstone demonstration
+-
+-## Baseline & Ablation Ladders
+-
+-**M3 (forecasting) — three-way comparison:**
+-1. Non-ML distance-threshold baseline (no learning)
+-2. Plain per-satellite LSTM (learning, no graph structure)
+-3. Full continuous-time TGNN + uncertainty head (proposed)
+-
+-**M4 (coordination) — five-way comparison:**
+-1. Single-agent RL, no coordination
+-2. IPPO (independent learning, no shared information)
+-3. MAPPO + reward penalty (the original project plan — kept as the baseline it turned out to be)
+-4. MADDPG (continuous-action comparison)
+-5. Constrained/Lagrangian formulation (the proposed method)
+-
+-**Key ablations:**
+-- Uncertainty head on/off — does calibrated uncertainty measurably reduce the downstream policy's constraint-violation rate?
+-- Safety filter on/off — does M5 add anything beyond constrained RL alone?
+-- Sparse graph vs. exhaustive pairwise — the false-negative rate; load-bearing for the entire efficiency claim
+-- Reward-penalty vs. constrained MARL — reproduces the constrained-optimization literature's own fixed-penalty comparison, in this domain
+-- ConstellAI's safety filter vs. GCBF+ directly, on identical scenarios
+-
+-## What This Project Never Claims
+-
+-- **Not** "guaranteed safety" — report empirical Monte Carlo success rate, the same way the closest published comparable systems report theirs.
+-- **Not** "a novel scalable safety mechanism" — GCBF+ already published a stronger, formally-proven version; ConstellAI adapts and compares.
+-- **Not** "scales to thousands of satellites" without the Step 9 scaling curve to back it, benchmarked against GCBF+'s own published numbers.
+-- **Not** "no information loss from graph sparsity" without the false-negative gate's actual measured rate attached.
+-
+-## Team
++## 12. Team (as recorded in the earlier README; names and final attribution to be confirmed by the team)
+ 
+ | Role | Focus |
+ |---|---|
+-| Dev A + Dev B | M1 (orbital mechanics) + M6 (simulation & evaluation) |
++| Dev A + Dev B | M1 (orbital mechanics) + M6 (simulation and evaluation) |
+ | Dev C | M2 (sparse graph) + M3 (temporal forecasting) |
+ | Dev D | M4 (constrained MARL), solo |
+ | Mentor + Dev D | M5 (safety filter), paired |
++
++The trigger-ladder, tracking, forecaster, protocol, ESA study and final-evaluation work belongs to the project lead and is not attributed here per author **[to be filled by the team]**.
++
++Licence: to be added.
+diff --git a/constellai/scripts/evaluate_tracked.py b/constellai/scripts/evaluate_tracked.py
+index c37af1c..2b508fd 100644
+--- a/constellai/scripts/evaluate_tracked.py
++++ b/constellai/scripts/evaluate_tracked.py
+@@ -1,6 +1,6 @@
+ """Evaluate tracked-observation checkpoints (deterministic mean action) and reference policies.
+ 
+-Pilot stream by default; the final test stream (2) requires --final. Every policy gets a
++Pilot stream by default; the final test stream (7) requires --final. Every policy gets a
+ fresh environment with the same noise seed, so noise sequences and scenarios are paired.
+ Raw per-trial results are saved beside the summary.
+ """
+@@ -70,7 +70,7 @@ def main():
+     p.add_argument("--n-agents", type=int, default=3)
+     p.add_argument("--sigma-p", type=float, default=None, help="default: the checkpoint's own value")
+     p.add_argument("--noise-seed", type=int, default=12345)
+-    p.add_argument("--final", action="store_true", help="use the final test stream (2)")
++    p.add_argument("--final", action="store_true", help="use the final test stream (7), one-time evaluation of frozen thresholds")
+     p.add_argument("--val", action="store_true", help="use the validation stream (4), for choosing thresholds")
+     p.add_argument("--distance-trigger", type=float, nargs="*", default=[], help="A0: current-distance triggers (x collision radius)")
+     p.add_argument("--hcw-tau", type=float, nargs="*", default=[], help="E-HCW: point-miss triggers with exact HCW propagation (x collision radius)")
+diff --git a/constellai/scripts/freeze_final.py b/constellai/scripts/freeze_final.py
+index a082387..5fe9f86 100644
+--- a/constellai/scripts/freeze_final.py
++++ b/constellai/scripts/freeze_final.py
+@@ -69,7 +69,9 @@ def main():
+         name = sc.choose(data, a.sigma, fam, a.target)
+ 
+         if name is None:
+-            print(f"{fam:<7} no threshold reaches {a.target} on stream 4 -> excluded")
++            ran = any(sg == a.sigma and st == sc.VAL and sc.family_of(nm) == fam for (sg, st, nm) in data)
++            why = "run, but no threshold reaches the target on stream 4" if ran else "family not run in this root"
++            print(f"{fam:<7} {why} (target {a.target}) -> excluded")
+             continue
+ 
+         free, dv = data[(a.sigma, sc.VAL, name)]
+diff --git a/constellai/scripts/select_and_compare.py b/constellai/scripts/select_and_compare.py
+index 79be9da..e956db3 100644
+--- a/constellai/scripts/select_and_compare.py
++++ b/constellai/scripts/select_and_compare.py
+@@ -69,7 +69,14 @@ def main():
+         for fam, _, _ in FAMILIES:
+             name = choose(data, sigma, fam, args.target)
+             if name is None:
+-                print(f"{fam:<7}(no threshold reaches the target on the validation stream)")
++                ran = any(sg == sigma and st == VAL and family_of(nm) == fam for (sg, st, nm) in data)
++                paired = any(sg == sigma and st == PILOT and family_of(nm) == fam for (sg, st, nm) in data)
++                if not ran:
++                    print(f"{fam:<7}(family not run at this sigma: no stream-4 results found)")
++                elif not paired:
++                    print(f"{fam:<7}(stream-4 results exist but no matching stream-6 run: incomplete)")
++                else:
++                    print(f"{fam:<7}(run, but no threshold reaches the target on the validation stream)")
+                 continue
+             vf, vd = data[(sigma, VAL, name)]
+             pf, pdv = data[(sigma, PILOT, name)]
+diff --git a/docs/REPORT.md b/docs/REPORT.md
+new file mode 100644
+index 0000000..32a2ce4
+--- /dev/null
++++ b/docs/REPORT.md
+@@ -0,0 +1,37 @@
++# B.Tech project report: content map for ConstellAI
++
++This file maps each standard report chapter to **verified** material in this repository and states what the team still has to write or decide. Nothing here is new evidence; numbers are in `README.md` §8 and `results/`. Items marked **[team]** cannot be filled from the repository.
++
++| Chapter | What to write | Verified source in the repo | Open items |
++|---|---|---|---|
++| 1 Introduction | Congested LEO; conjunction triage; the question of whether the form of the risk signal changes the fuel needed | `README.md` §1 | **[team]** motivation figures with citations |
++| 2 Literature survey | Maneuver timing under updates (arXiv:2501.02667); Bayesian maneuver planning (Greco et al.); conformal belief-space planning (ConstrainedZero); PID Lagrangian (Stooke et al.); ESA Kelvins challenge; decision-theoretic calibration priors | `README.md` §11 | All citations are **[unverified]**; read each source before citing |
++| 3 Problem statement | Question, hypotheses H1–H4, non-claims | `README.md` §1, §9 | none |
++| 4 Requirements | Python ≥ 3.11; `sgp4`, `numpy`, `torch`, `scipy`, `matplotlib`; extras `dev`, `esa`; ~7–10 min for the full suite; ladder jobs run for minutes to hours per job | `pyproject.toml`, `README.md` §6–7 | **[team]** hardware specification of the author machine (12 logical cores per the run logs) |
++| 5 Architecture | Pipeline: scenario generator → HCW dynamics → Kalman tracks → analytic forecaster → trigger ladder → frozen evaluation | `README.md` §3–4; `constellai/` package | architecture diagram **[team]** (none exists in the repo) |
++| 6 Project plan | Milestones M1–M7 and roles | `README.md` §2 and §12 (earlier plan) | **[team]** dates and schedule; the repo contains no timeline |
++| 7 Implementation | Module by module: tracking, forecasting, triggers, protocol scripts; design decisions (ladder primary, RL secondary; mission reward ×0.05; cooperative thrust broadcast; rejected TGN-lite forecaster) | `README.md` §3–4; module docstrings | none for design; contributions per member **[team]** |
++| 8 Performance evaluation | Metrics: collision-free rate (Wilson), Δv per agent (paired bootstrap), NEES, Brier skill, ECE, regret | `evaluation/stats.py`, `select_and_compare.py`, `analyze_calibration_regret.py` | none |
++| 9 Testing | 313 offline tests passed (+4 network deselected), coverage 86%; author-machine 308 passed / 1 skipped; miniature end-to-end run | `README.md` §7 | CI absent (pending) |
++| 10 Deployment | Not applicable: research code, no service or deployment artefact. Reproduction instructions only | `README.md` §6 | state explicitly that no deployment exists |
++| 11 Results and analysis | Stream 7 table; mixture selection table; homogeneous ladder; regret; ESA; RL negative result; predictions vs outcomes | `README.md` §8; `results/` | figures from `make_figures.py` / `make_final_figure.py` (generated, not tracked) |
++| 12 Applications | Decision support for conjunction-triage trigger design; a testbed for calibration questions | none beyond `README.md` §1 | **[team]** write cautiously: results are synthetic, single-threat, no safety guarantee |
++| 13 Conclusion | Supported: extrapolation beats a reactive trigger; at matched safety F600 is cheaper than the k·σ margin in one heterogeneous condition (0.059 [0.047, 0.071]); fixed-τ loses to margin; ESA study inconclusive | `README.md` §8.4, §8.7, §9 | keep to the claims register |
++| 14 Future scope | Matched homogeneous control; F400/F200; n ≥ 300 selection; sequence forecaster on ESA data; noise-mismatch; harder scenarios; M5 audit; CI | `README.md` §10 | none |
++| 15 References | As in `README.md` §11 | | verify before submission |
++| Appendices | A: threshold grids (`README.md` §3.3); B: per-file test counts (§7); C: frozen thresholds (`frozen_thresholds.json`); D: full paired-difference tables (`results/table_paired_sigma25.csv`, `results/final_stream7_report.csv`); E: the theory note (P1–P5, kept outside the repo as `theory.tex` so far) | | P4 proof and prior-art statements to be checked |
++
++## Individual module contributions
++
++The earlier README records roles only (Dev A + Dev B: M1 and M6; Dev C: M2 and M3; Dev D: M4; Mentor + Dev D: M5). This clone has one commit, so git history cannot confirm authorship. **[team]** must add names and specific contributions.
++
++## Claims that may be written
++
++1. Extrapolating the track (E) beats a reactive trigger (A0); intervals exclude 0 at every tested noise level (pilot, n = 100).
++2. In the {5, 50} m mixture on the one-time stream 7 evaluation (n = 300, thresholds selected on 100 validation trials): fixed-τ HCW loses to the k·σ margin at identical safety (+0.036 [0.027, 0.046]); F600 is cheaper than the margin at equal safety (+0.059 [0.047, 0.071]).
++3. Perfect state knowledge would cut Δv to about 0.05 m/s; the gap to the best track-conditioned rule is large (F600 − B = +0.136 [0.122, 0.150]).
++4. The learned RL planner was far less fuel-efficient than the rules and gained nothing from an oracle forecast (recorded pilot).
++
++## Claims that must not be written
++
++Calibration measures predict Δv or regret on real data (ESA: inconclusive); heterogeneity explains F's advantage (no matched control); multi-horizon forecasting helps (not evaluated); E beats E_hcw (E missed the safety target); any fuel claim from real data; any safety guarantee; any new theory.
+diff --git a/pyproject.toml b/pyproject.toml
+index a2db010..2f85e65 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -13,6 +13,7 @@ dependencies = [
+ 
+ [project.optional-dependencies]
+ dev = ["pytest>=8.0", "pytest-cov"]
++esa = ["pandas>=2.0", "scikit-learn>=1.3"]
+ 
+ [tool.pytest.ini_options]
+ testpaths = ["tests"]
+diff --git a/tests/unit/test_select_and_freeze.py b/tests/unit/test_select_and_freeze.py
+new file mode 100644
+index 0000000..9d016b8
+--- /dev/null
++++ b/tests/unit/test_select_and_freeze.py
+@@ -0,0 +1,52 @@
++"""Selection rule and freeze_final policy-name parsing (synthetic data only; never touches stream 7)."""
++import json
++import sys
++from pathlib import Path
++
++import numpy as np
++import pytest
++
++SCRIPTS = Path(__file__).resolve().parents[2] / "constellai" / "scripts"
++sys.path.insert(0, str(SCRIPTS))
++import freeze_final as ff  # noqa: E402
++import select_and_compare as sc  # noqa: E402
++
++
++def _write(root, job, name, stream, collided, fuel, sigma=25.0):
++    d = Path(root) / job
++    d.mkdir(parents=True, exist_ok=True)
++    trials = [{"index": i, "collided": bool(c), "mean_fuel_used": float(f)} for i, (c, f) in enumerate(zip(collided, fuel))]
++    (d / f"eval_{name}_stream{stream}.json").write_text(json.dumps(
++        {"policy": name, "stream": stream, "preset": "short", "noise_seed": 0,
++         "env": {"sigma_p": sigma}, "summary": {}, "trials": trials}))
++
++
++def test_choose_takes_cheapest_feasible_threshold_and_requires_pilot_run():
++    n = 100
++    ok = [0] * n
++    bad = [1] * 10 + [0] * 90  # 0.90 collision-free: infeasible at target 0.98
++    data_root = Path(pytest.importorskip("tempfile").mkdtemp())
++    for name, coll, fuel in [("heuristic_tau1", bad, 0.1), ("heuristic_tau2", ok, 0.3), ("heuristic_tau3", ok, 0.5)]:
++        _write(data_root, "s25_val_E", name, 4, coll, [fuel] * n)
++    for name in ("heuristic_tau1", "heuristic_tau2"):  # tau3 has no pilot run -> not eligible
++        _write(data_root, "s25_pilot_E", name, 6, ok, [0.3] * n)
++    data = sc.load(data_root)
++    assert sc.choose(data, 25.0, "E", 0.98) == "heuristic_tau2"
++    assert sc.choose(data, 25.0, "F600", 0.98) is None
++
++
++@pytest.mark.parametrize("name,expected", [
++    ("dist_D4", ["--distance-trigger", "4"]),
++    ("heuristic_tau1.2", ["--heuristic-tau", "1.2"]),
++    ("hcw_tau1.5", ["--hcw-tau", "1.5"]),
++    ("hcwm_k1", ["--hcw-margin-k", "1"]),
++    ("prob_analytic_p0.15_h3", ["--prob-trigger", "0.15", "--prob-horizon", "3", "--forecast-kind", "analytic"]),
++    ("prob_oracle_p0.5_h3", ["--prob-trigger", "0.5", "--prob-horizon", "3", "--forecast-kind", "oracle"]),
++])
++def test_policy_name_maps_to_evaluate_tracked_flags(name, expected):
++    assert ff.flags(name) == expected
++
++
++def test_unknown_policy_name_is_rejected():
++    with pytest.raises(ValueError):
++        ff.flags("mystery_policy")

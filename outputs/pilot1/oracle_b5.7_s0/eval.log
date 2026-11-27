@@ -1,0 +1,3 @@
+stream 6 (pilot), preset short, 100 trials, noise seed 12345
+policy                         collision-free [95% CI]  min sep m  dv/agent saturation
+oracle_b5.7_s0                0.890 [0.814,0.937]      141.5    26.546      0.889

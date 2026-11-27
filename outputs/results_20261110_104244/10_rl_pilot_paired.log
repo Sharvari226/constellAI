@@ -1,0 +1,40 @@
+﻿reactive: 3 seeds x 100 scenarios   (S<5: descriptive only)
+oracle: 3 seeds x 100 scenarios   (S<5: descriptive only)
+
+collision-free rate: point estimates
+  reactive 0.913   oracle 0.910   zero_thrust 0.550   constant_burn 0.770   heuristic_tau1.2 0.970   heuristic_tau1.5 0.990   heuristic_tau2 1.000   heuristic_tau3 1.000   heuristic_tau5 1.000
+collision-free rate: paired differences, 95% bootstrap interval
+  reactive - oracle: +0.003 [-0.073, +0.080]
+  reactive - zero_thrust: +0.363 [+0.260, +0.467]
+  reactive - constant_burn: +0.143 [+0.047, +0.237]
+  reactive - heuristic_tau1.2: -0.057 [-0.130, +0.007]
+  reactive - heuristic_tau1.5: -0.077 [-0.140, -0.023]
+  reactive - heuristic_tau2: -0.087 [-0.150, -0.040]
+  reactive - heuristic_tau3: -0.087 [-0.150, -0.040]
+  reactive - heuristic_tau5: -0.087 [-0.150, -0.040]
+  oracle - zero_thrust: +0.360 [+0.253, +0.470]
+  oracle - constant_burn: +0.140 [+0.050, +0.233]
+  oracle - heuristic_tau1.2: -0.060 [-0.130, +0.003]
+  oracle - heuristic_tau1.5: -0.080 [-0.143, -0.020]
+  oracle - heuristic_tau2: -0.090 [-0.153, -0.037]
+  oracle - heuristic_tau3: -0.090 [-0.153, -0.037]
+  oracle - heuristic_tau5: -0.090 [-0.153, -0.037]
+
+dv per agent (m/s): point estimates
+  reactive 19.751   oracle 23.679   zero_thrust 0.000   constant_burn 30.838   heuristic_tau1.2 0.235   heuristic_tau1.5 0.318   heuristic_tau2 0.432   heuristic_tau3 0.710   heuristic_tau5 1.415
+dv per agent (m/s): paired differences, 95% bootstrap interval
+  reactive - oracle: -3.93 [-7.89, -0.00]
+  reactive - zero_thrust: +19.75 [+16.97, +23.08]
+  reactive - constant_burn: -11.09 [-14.23, -7.60]
+  reactive - heuristic_tau1.2: +19.52 [+16.73, +22.84]
+  reactive - heuristic_tau1.5: +19.43 [+16.65, +22.76]
+  reactive - heuristic_tau2: +19.32 [+16.53, +22.64]
+  reactive - heuristic_tau3: +19.04 [+16.27, +22.37]
+  reactive - heuristic_tau5: +18.34 [+15.55, +21.67]
+  oracle - zero_thrust: +23.68 [+21.22, +26.45]
+  oracle - constant_burn: -7.16 [-9.91, -4.21]
+  oracle - heuristic_tau1.2: +23.44 [+20.98, +26.21]
+  oracle - heuristic_tau1.5: +23.36 [+20.89, +26.13]
+  oracle - heuristic_tau2: +23.25 [+20.78, +26.03]
+  oracle - heuristic_tau3: +22.97 [+20.50, +25.73]
+  oracle - heuristic_tau5: +22.26 [+19.80, +25.03]

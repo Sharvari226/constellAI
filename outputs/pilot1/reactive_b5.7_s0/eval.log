@@ -1,0 +1,3 @@
+stream 6 (pilot), preset short, 100 trials, noise seed 12345
+policy                         collision-free [95% CI]  min sep m  dv/agent saturation
+reactive_b5.7_s0              0.930 [0.863,0.966]      141.5    23.282      0.922
