@@ -1,0 +1,15 @@
+﻿
+pilot stream 6, preset short, 100 trials per checkpoint, sigma_p 25.0, 300 training episodes, reward scale 0.05
+arm        budget  n   collision-free (mean +/- sd over seeds)        dv/agent m/s  min sep m saturation
+oracle        5.7  3                       0.910 +/-  0.044       23.68 +/-  2.75      133.8      0.679
+reactive      5.7  3                       0.913 +/-  0.038       19.75 +/-  3.24      132.4      0.544
+  per run: reactive_b5.7_s0 free 0.93 dv 23.3; reactive_b5.7_s1 free 0.94 dv 19.0; reactive_b5.7_s2 free 0.87 dv 16.9; oracle_b5.7_s0 free 0.89 dv 26.5; oracle_b5.7_s1 free 0.96 dv 21.1; oracle_b5.7_s2 free 0.88 dv 23.4
+
+reference policies (same scenarios, same noise seed):
+  constant_burn      free 0.770 [0.678,0.842]  dv  30.84  min sep   84.2
+  heuristic_tau1.2   free 0.970 [0.915,0.990]  dv   0.23  min sep   90.8
+  heuristic_tau1.5   free 0.990 [0.946,0.998]  dv   0.32  min sep  102.2
+  heuristic_tau2     free 1.000 [0.963,1.000]  dv   0.43  min sep  119.8
+  heuristic_tau3     free 1.000 [0.963,1.000]  dv   0.71  min sep  153.8
+  heuristic_tau5     free 1.000 [0.963,1.000]  dv   1.41  min sep  186.7
+  zero_thrust        free 0.550 [0.452,0.644]  dv   0.00  min sep   73.6

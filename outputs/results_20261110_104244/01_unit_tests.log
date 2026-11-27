@@ -1,0 +1,13 @@
+﻿........................................................................ [ 24%]
+........................................................................ [ 48%]
+........................................................................ [ 72%]
+..........................s............................................. [ 96%]
+............                                                             [100%]
+============================== warnings summary ===============================
+tests/unit/test_fetch.py::test_fetched_records_are_propagatable
+tests/unit/test_fetch.py::test_fetched_records_are_propagatable
+  C:\Users\SHARVARI JADHAV\Downloads\constellai_fresh\tests\unit\test_fetch.py:45: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    record, datetime.utcnow(), datetime.utcnow() + timedelta(hours=1), timedelta(minutes=10)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+299 passed, 1 skipped, 2 warnings in 144.49s (0:02:24)

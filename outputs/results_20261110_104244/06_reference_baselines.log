@@ -1,0 +1,12 @@
+﻿
+short warning (150.0, 600.0), 100 episodes, stream 6, gamma=0.99
+ policy    collision-free [95% CI] agent coll.  dv/agent m/s  disc cost mean     p90
+   zero   0.550 [0.452,0.644]       0.197         0.000         14.3088  23.435
+ random   0.730 [0.636,0.807]       0.107        17.527         10.9950  21.867
+   burn   0.770 [0.678,0.842]       0.133        30.838         11.4461  23.325
+
+long warning (500.0, 1500.0), 100 episodes, stream 6, gamma=0.99
+ policy    collision-free [95% CI] agent coll.  dv/agent m/s  disc cost mean     p90
+   zero   0.550 [0.452,0.644]       0.197         0.000          9.8545  19.098
+ random   0.960 [0.902,0.984]       0.017        18.992          3.0312  10.383
+   burn   0.860 [0.779,0.915]       0.083        32.887          6.0757  15.068

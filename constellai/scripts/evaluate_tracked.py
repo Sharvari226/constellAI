@@ -1,6 +1,6 @@
 """Evaluate tracked-observation checkpoints (deterministic mean action) and reference policies.
 
-Pilot stream by default; the final test stream (2) requires --final. Every policy gets a
+Pilot stream by default; the final test stream (7) requires --final. Every policy gets a
 fresh environment with the same noise seed, so noise sequences and scenarios are paired.
 Raw per-trial results are saved beside the summary.
 """
@@ -70,7 +70,7 @@ def main():
     p.add_argument("--n-agents", type=int, default=3)
     p.add_argument("--sigma-p", type=float, default=None, help="default: the checkpoint's own value")
     p.add_argument("--noise-seed", type=int, default=12345)
-    p.add_argument("--final", action="store_true", help="use the final test stream (2)")
+    p.add_argument("--final", action="store_true", help="use the final test stream (7)")
     p.add_argument("--val", action="store_true", help="use the validation stream (4), for choosing thresholds")
     p.add_argument("--distance-trigger", type=float, nargs="*", default=[], help="A0: current-distance triggers (x collision radius)")
     p.add_argument("--hcw-tau", type=float, nargs="*", default=[], help="E-HCW: point-miss triggers with exact HCW propagation (x collision radius)")

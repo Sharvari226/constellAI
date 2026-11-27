@@ -1,0 +1,13 @@
+﻿training LSTM across 3 seeds...
+training static GNN across 3 seeds...
+training TGN-lite (point estimate) across 3 seeds...
+LSTM pool: 2610 pairs, 44 positive (6+6 scenarios, STEP=0:02:00)
+GNN pool:  2610 pairs, 44 positive (same pair population as LSTM)
+TGN-lite pool: 3915 pairs, 45 positive (3 seeds x 3 test scenarios, trained on all 6 train scenarios, STEP=0:05:00 -- coarser step AND smaller test set than LSTM/GNN)
+model                        AP (mean [min-max])   precision    recall  accuracy
+LSTM                           0.756 [0.66-0.84]       0.760     0.864     0.993
+static GNN                     0.183 [0.17-0.19]       0.162     0.773     0.929
+TGN-lite                       0.246 [0.18-0.31]       0.047     0.711     0.833
+training TGN-lite WITH uncertainty head (Beta-NLL) across 3 seeds...
+TGN-lite (point estimate):    AP 0.246 [0.18-0.31]
+TGN-lite (uncertainty-aware): AP 0.014 [0.01-0.02], ECE 0.3344

@@ -1,0 +1,7 @@
+stream 6 (pilot), preset short, 100 trials, noise seed 12345
+policy                         collision-free [95% CI]  min sep m  dv/agent saturation
+prob_analytic_p0.03_h1        1.000 [0.963,1.000]      117.4     0.343      0.000
+prob_analytic_p0.07_h1        1.000 [0.963,1.000]      105.0     0.221      0.000
+prob_analytic_p0.15_h1        0.960 [0.902,0.984]       93.8     0.149      0.000
+prob_analytic_p0.3_h1         0.930 [0.863,0.966]       85.8     0.093      0.000
+prob_analytic_p0.5_h1         0.880 [0.802,0.930]       80.7     0.071      0.000

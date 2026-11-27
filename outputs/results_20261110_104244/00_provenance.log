@@ -1,0 +1,6 @@
+﻿date: 2026-11-10T10:42:44
+branch: feat/noisy-tracks
+commit: 352982fb717b23115082f8ba17847a198dacaeba
+uncommitted source changes (should be none):
+python 3.13.7 | numpy 2.5.0 | torch 2.12.1+cpu
+final-test-stream (2) evaluations present, must be 0 before the one-time final run: 0
